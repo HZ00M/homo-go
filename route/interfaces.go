@@ -117,18 +117,3 @@ type ModuleInitializer interface {
 	// 初始化模块
 	OnInitModule() error
 }
-
-// ==================== 工厂接口定义 ====================
-
-// RouteDriverFactory 路由驱动工厂接口
-// 创建和管理路由驱动实例
-type RouteDriverFactory interface {
-	// 创建路由驱动
-	CreateDriver(config *StatefulBaseConfig) (RouteInfoDriver, error)
-
-	// 获取默认驱动
-	GetDefaultDriver() RouteInfoDriver
-
-	// 关闭所有驱动
-	CloseAll() error
-}

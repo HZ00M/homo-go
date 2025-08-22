@@ -11,9 +11,7 @@ route/
 ├── types.go                    # 数据模型定义（服务状态、负载状态、工作负载状态等）
 ├── interfaces.go               # 核心接口定义（RouteInfoDriver、StatefulExecutor等）
 ├── executor/                   # 执行器模块
-│   ├── redis_manager.go        # Redis管理器（连接池、Lua脚本、配置管理）
 │   ├── stateful_executor.go    # 有状态执行器实现
-│   ├── error_handler.go        # 错误处理和指标收集
 │   ├── lua_scripts/            # Lua脚本文件
 │   │   └── statefulSetLink.lua # 设置Pod链接脚本
 │   └── README.md               # 执行器模块说明
@@ -83,6 +81,7 @@ import (
     "time"
     "github.com/go-kratos/kratos/v2/route"
     "github.com/go-kratos/kratos/v2/route/executor"
+    "github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -96,15 +95,16 @@ func main() {
     // 创建日志记录器
     logger := &MyLogger{}
 
-    // 创建Redis管理器
-    redisManager, err := executor.NewRedisManager(redisConfig, logger)
-    if err != nil {
-        panic(err)
-    }
-    defer redisManager.Close()
+    // 创建Redis客户端
+    redisClient := redis.NewClient(&redis.Options{
+        Addr:     "localhost:6379",
+        Password: "",
+        DB:       0,
+    })
+    defer redisClient.Close()
 
     // 创建有状态执行器
-    executor := executor.NewStatefulExecutor(redisManager, logger)
+    executor := executor.NewStatefulExecutor(redisClient, logger)
 
     // 设置服务状态
     ctx := context.Background()

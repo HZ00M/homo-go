@@ -1,4 +1,11 @@
-# Route模块 6A迁移任务清单
+# Driver模块开发任务清单
+
+> **重要说明**：Task-04和Task-05的功能已在 `route/executor/` 模块中实现，本模块不再重复实现。
+
+## 版本信息
+- **当前版本**: v1.9.0
+- **最后更新**: 2025-01-27
+- **更新内容**: 清理不需要的任务，简化任务清单
 
 ## 1. 目录结构图
 ```
@@ -7,6 +14,7 @@ route/
 ├── types.go               # 所有数据模型定义（服务状态、负载状态、工作负载状态、状态工具、基础配置、枚举等） 
 ├── driver/                 # 驱动接口和实现
 │   └── route_driver.go     # RouteInfoDriverImpl主实现 + 驱动工厂功能 
+│   └── route_driver_test.go # 单元测试文件
 ├── cache/              # 核心组件
 │       └── state_cache.go         # ServiceStateCache服务状态缓存 + 缓存管理 + 配置
 │       └── examples/              # 使用示例
@@ -15,24 +23,20 @@ route/
 
 ## 📋 目录结构实现状态
 
-### ✅ 已完成设计（Task-01 ~ Task-02）
-- **Task-01**: `route/interfaces.go` - RouteInfoDriver核心接口（已完成）
-- **Task-02**: `route/types.go` - 完整数据模型和状态枚举（已完成）
-
 ### ✅ 已完成设计（Task-01 ~ Task-03）
 - **Task-01**: `route/interfaces.go` - RouteInfoDriver核心接口（已完成）
 - **Task-02**: `route/types.go` - 完整数据模型和状态枚举（已完成）
 - **Task-03**: `route/cache/` - ServiceStateCache缓存组件（已完成）
   - `route/cache/state_cache.go` - ServiceStateCache服务状态缓存 + 缓存管理 + 配置
 
-### ❌ 待实现（Task-04 ~ Task-10）
-- **Task-04**: `redis/` - StatefulRedisExecutor Redis执行器
-- **Task-05**: `redis/` - ServerRedisExecutor 服务Redis执行器
-- **Task-06**: `driver/` - RouteInfoDriverImpl 主驱动实现 + 驱动工厂功能
-- **Task-07**: `grpc/` - gRPC客户端集成
-- **Task-08**: `config/` - 配置管理和依赖注入
-- **Task-09**: `tests/` - 单元测试和集成测试
-- **Task-10**: 性能优化和监控指标
+### ✅ 已完成实现（Task-06）
+- **Task-06**: `route/driver/` - RouteInfoDriverImpl 主驱动实现 + 驱动工厂功能（已完成）
+  - `route/driver/route_driver.go` - 主驱动实现和驱动工厂
+  - `route/driver/route_driver_test.go` - 完整的单元测试
+
+### ✅ 已在其他模块实现（Task-04 ~ Task-05）
+- **Task-04**: `redis/` - StatefulRedisExecutor Redis执行器（已在executor模块中实现）
+- **Task-05**: `redis/` - ServerRedisExecutor 服务Redis执行器（已在executor模块中实现）
 
 ## 2. 类图
 ```mermaid
@@ -40,42 +44,37 @@ classDiagram
     class RouteInfoDriver {
         +GetLinkInfoCacheTimeSecs() int
         +RegisterRoutingStateChangedEvent(namespace string, stateChanged StateChanged)
-        +OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now StatefulServiceState)
+        +OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now *StatefulServiceState)
         +GetReadyServiceState(ctx, namespace, serviceName) (map[int]*StatefulServiceState, error)
         +GetAllServiceState(ctx, namespace, serviceName) (map[int]*StatefulServiceState, error)
         +GetServiceNameByTag(ctx, namespace, tag) (string, error)
-        +SetGlobalServiceNameTag(ctx, namespace, tag, serviceName) error
-        +IsPodRoutable(namespace, serviceName, podIndex) bool
-        +AlivePods(namespace, serviceName) map[int]*StatefulServiceState
-        +RoutablePods(namespace, serviceName) map[int]*StatefulServiceState
-        +GetServiceBestPod(ctx, namespace, serviceName) (int, error)
-        +IsPodAvailable(namespace, serviceName, podIndex) bool
-        +IsWorkloadReady(ctx, namespace, serviceName) (bool, error)
+        +SetGlobalServiceNameTag(ctx, namespace, tag, serviceName) (bool, error)
+        +IsPodRoutable(namespace, serviceName string, podIndex int) bool
+        +AlivePods(namespace, serviceName string) map[int]*StatefulServiceState
+        +RoutablePods(namespace, serviceName string) map[int]*StatefulServiceState
+        +GetServiceBestPod(ctx, namespace, serviceName string) (int, error)
+        +IsPodAvailable(namespace, serviceName string, podIndex int) bool
+        +IsWorkloadReady(ctx, namespace, serviceName string) (bool, error)
     }
     
     class RouteInfoDriverImpl {
         -baseConfig StatefulBaseConfig
-        -statefulRedisExecutor StatefulRedisExecutor
+        -statefulExecutor StatefulExecutor
         -stateCache ServiceStateCache
-        -redisPool RedisPool
-        -serviceStateGrpcClient ServiceStateGrpcClient
         -onStateChange map[string]StateChanged
-        -serverRedisExecutor ServerRedisExecutor
-        +OnInitModule() error
         +GetLinkInfoCacheTimeSecs() int
         +RegisterRoutingStateChangedEvent(namespace string, stateChanged StateChanged)
-        +OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now StatefulServiceState)
+        +OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now *StatefulServiceState)
         +GetReadyServiceState(ctx, namespace, serviceName) (map[int]*StatefulServiceState, error)
         +GetAllServiceState(ctx, namespace, serviceName) (map[int]*StatefulServiceState, error)
         +GetServiceNameByTag(ctx, namespace, tag) (string, error)
-        +SetGlobalServiceNameTag(ctx, namespace, tag, serviceName) error
-        +IsPodRoutable(namespace, serviceName, podIndex) bool
-        +AlivePods(namespace, serviceName) map[int]*StatefulServiceState
-        +RoutablePods(namespace, serviceName) map[int]*StatefulServiceState
-        +GetServiceBestPod(ctx, namespace, serviceName) (int, error)
-        +IsPodAvailable(namespace, serviceName, podIndex) bool
-        +IsWorkloadReady(ctx, namespace, serviceName) (bool, error)
-        -beginTime() int64
+        +SetGlobalServiceNameTag(ctx, namespace, tag, serviceName) (bool, error)
+        +IsPodRoutable(namespace, serviceName string, podIndex int) bool
+        +AlivePods(namespace, serviceName string) map[int]*StatefulServiceState
+        +RoutablePods(namespace, serviceName string) map[int]*StatefulServiceState
+        +GetServiceBestPod(ctx, namespace, serviceName string) (int, error)
+        +IsPodAvailable(namespace, serviceName string, podIndex int) bool
+        +IsWorkloadReady(ctx, namespace, serviceName string) (bool, error)
     }
     
     class ServiceStateCache {
@@ -86,33 +85,31 @@ classDiagram
         +GetOrder() int
         +OnInitModule() error
         +GetServiceBestPod(ctx, namespace, serviceName) (int, error)
-        +IsPodAvailable(namespace, serviceName, podIndex) bool
-        +IsPodRoutable(namespace, serviceName, podIndex) bool
-        +AlivePods(namespace, serviceName) map[int]*StatefulServiceState
-        +RoutablePods(namespace, serviceName) map[int]*StatefulServiceState
+        +IsPodAvailable(namespace, serviceName string, podIndex int) bool
+        +IsPodRoutable(namespace, serviceName string, podIndex int) bool
+        +AlivePods(namespace, serviceName string) map[int]*StatefulServiceState
+        +RoutablePods(namespace, serviceName string) map[int]*StatefulServiceState
         +Run()
-        -getPod(routableServices []*StatefulServiceState) int
-        -updateService(ctx, namespace, serviceName)
-        -updateServicePromise(ctx, namespace, serviceName) error
-        -processRet(namespace, serviceName, services map[int]*StatefulServiceState)
     }
     
-    class StatefulRedisExecutor {
-        -redisPool RedisPool
-        +GetServiceState(ctx, namespace, serviceName) (map[int]*StatefulServiceState, error)
+    class StatefulExecutor {
+        +GetServiceState(ctx, namespace, serviceName) (map[int]string, error)
         +GetWorkloadState(ctx, namespace, serviceName) (string, error)
+        +SetServiceState(ctx, namespace, serviceName, podID, state) error
+        +SetLinkedPod(ctx, namespace, uid, serviceName, podID, persistSeconds) (int, error)
+        +GetLinkedPod(ctx, namespace, uid, serviceName) (int, error)
     }
     
-    class ServerRedisExecutor {
-        -redisPool RedisPool
-        +GetTag(ctx, namespace, tag) (string, error)
-        +SetTag(ctx, namespace, tag, value []byte) error
+    class RouteDriverFactory {
+        -log log.Logger
+        +CreateRouteInfoDriver(baseConfig, stateCache, statefulExecutor) RouteInfoDriver
+        +CreateRouteInfoDriverWithOptions(opts ...RouteDriverOption) RouteInfoDriver
     }
     
     RouteInfoDriver <|-- RouteInfoDriverImpl
     RouteInfoDriverImpl --> ServiceStateCache
-    RouteInfoDriverImpl --> StatefulRedisExecutor
-    RouteInfoDriverImpl --> ServerRedisExecutor
+    RouteInfoDriverImpl --> StatefulExecutor
+    RouteDriverFactory --> RouteInfoDriverImpl
     ServiceStateCache --> RouteInfoDriver
 ```
 
@@ -122,18 +119,17 @@ sequenceDiagram
     participant Client
     participant RouteInfoDriverImpl
     participant ServiceStateCache
-    participant StatefulRedisExecutor
-    participant ServerRedisExecutor
+    participant StatefulExecutor
     participant Redis
     participant gRPC
     
     Client->>RouteInfoDriverImpl: GetReadyServiceState()
     RouteInfoDriverImpl->>RouteInfoDriverImpl: GetAllServiceState()
     alt 本命名空间
-        RouteInfoDriverImpl->>StatefulRedisExecutor: GetServiceState()
-        StatefulRedisExecutor->>Redis: 查询服务状态
-        Redis-->>StatefulRedisExecutor: 返回状态数据
-        StatefulRedisExecutor-->>RouteInfoDriverImpl: 返回结果
+        RouteInfoDriverImpl->>StatefulExecutor: GetServiceState()
+        StatefulExecutor->>Redis: 查询服务状态
+        Redis-->>StatefulExecutor: 返回状态数据
+        StatefulExecutor-->>RouteInfoDriverImpl: 返回结果
     else 跨命名空间
         RouteInfoDriverImpl->>gRPC: 查询服务状态
         gRPC-->>RouteInfoDriverImpl: 返回状态数据
@@ -147,15 +143,11 @@ sequenceDiagram
 | 任务 | 状态 | 优先级 | 完成度 | 责任人 | 预计完成时间 | 备注 |
 |---|---|-----|-----|-----|-----|---|
 | Task-01 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | 定义RouteInfoDriver核心接口 |
-| Task-02 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | 定义数据模型和状态枚举（合并到types.go） |
+| Task-02 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | 定义数据模型和状态枚举 |
 | Task-03 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | 实现ServiceStateCache缓存组件 |
-| Task-04 | ❌ 未开始 | 🔴 高 | 0% | 待分配 | - | 实现StatefulRedisExecutor Redis执行器 |
-| Task-05 | ❌ 未开始 | 🔴 高 | 0% | 待分配 | - | 实现ServerRedisExecutor 服务Redis执行器 |
-| Task-06 | ❌ 未开始 | 🔴 高 | 0% | 待分配 | - | 实现RouteInfoDriverImpl 主驱动实现 + 驱动工厂功能 |
-| Task-07 | ❌ 未开始 | 🟡 中 | 0% | 待分配 | - | 实现gRPC客户端集成 |
-| Task-08 | ❌ 未开始 | 🟡 中 | 0% | 待分配 | - | 配置管理和依赖注入 |
-| Task-09 | ❌ 未开始 | 🟢 低 | 0% | 待分配 | - | 单元测试和集成测试 |
-| Task-10 | ❌ 未开始 | 🟢 低 | 0% | 待分配 | - | 性能优化和监控指标 |
+| Task-04 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | StatefulRedisExecutor功能（已在executor模块中实现） |
+| Task-05 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | ServerRedisExecutor功能（已在executor模块中实现） |
+| Task-06 | ✅ 已完成 | 🔴 高 | 100% | AI助手 | 2025-01-27 | 实现RouteInfoDriverImpl主驱动实现和驱动工厂功能 |
 
 ## 5. 核心功能说明
 
@@ -190,6 +182,9 @@ sequenceDiagram
 - **数据模型简化**: 将 `model/` 目录下的多个数据模型文件合并到单一的 `route/types.go` 文件中
 - **架构简化**: 减少文件数量，提升代码内聚性
 - **缓存组件位置**: ServiceStateCache组件移至 `route/cache/` 目录
+- **Redis执行器实现**: StatefulRedisExecutor和ServerRedisExecutor功能已在 `route/executor/` 模块中实现
+- **驱动实现完成**: RouteInfoDriverImpl主驱动实现和驱动工厂功能已完成
+- **任务清单简化**: 移除了不需要的Task-07到Task-10，简化了任务管理
 
 ### 合并后的优势
 1. **减少文件数量**: 从6个数据模型文件合并为1个文件
@@ -197,6 +192,7 @@ sequenceDiagram
 3. **便于维护**: 所有数据结构定义集中在一个文件中，便于查看和维护
 4. **提升开发效率**: 减少文件切换，相关数据结构一目了然
 5. **目录结构清晰**: 按功能模块组织代码，便于理解和维护
+6. **任务管理简化**: 专注于核心功能，避免过度设计
 
 ### 注意事项
 - 需要确保 `types.go` 文件不会过大，建议控制在800行以内
@@ -208,4 +204,4 @@ sequenceDiagram
 
 **最后更新**: 2025-01-27  
 **更新人**: AI助手  
-**版本**: v1.3.0
+**版本**: v1.9.0

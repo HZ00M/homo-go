@@ -346,7 +346,7 @@ func (c *ServiceStateCacheImpl) updateMockData() {
 				state := &route.StatefulServiceState{
 					PodID:        podId,
 					State:        route.ServiceStateReady,
-					LoadState:    route.LoadStateLow,
+					LoadState:    2, // 低负载状态
 					RoutingState: route.RoutingStateReady,
 					UpdateTime:   time.Now().Unix(),
 				}
@@ -387,7 +387,7 @@ func (c *ServiceStateCacheImpl) updateRoutableStateCache() {
 func (c *ServiceStateCacheImpl) isPodRoutable(podState *route.StatefulServiceState) bool {
 	return podState.State == route.ServiceStateReady &&
 		podState.RoutingState == route.RoutingStateReady &&
-		podState.LoadState != route.LoadStateOverloaded
+		podState.LoadState != 5 // 过载状态
 }
 
 // getRoutablePodsFromCache 从缓存获取可路由的Pod

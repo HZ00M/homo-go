@@ -45,21 +45,22 @@
   - **数据模型**: 使用 `route/types.go` 中定义的统一数据模型，确保类型一致性
 
 - **核心功能模块**：
-  - `ServiceStateCache`: 主缓存组件（已完成）
-  - `CacheManager`: 缓存管理器（已完成）
-  - `UpdateScheduler`: 更新调度器（已完成）
-  - **数据模型**: 使用 `route/types.go` 中定义的 `StatefulServiceState`、`StateUtils` 等类型
+  - `ServiceStateCacheImpl`: 主缓存组件（已完成）
+  - `CacheConfig`: 缓存配置（已完成）
+  - `CacheEntry`: 缓存条目（已完成）
+  - `CacheStats`: 缓存统计信息（已完成）
 
 - **极小任务拆分**：
-  - ✅ T03-01：定义`ServiceStateCache`接口和结构体（已完成）
+  - ✅ T03-01：定义`ServiceStateCacheImpl`接口和结构体（已完成）
   - ✅ T03-02：实现缓存数据结构和管理（已完成）
   - ✅ T03-03：实现定时更新机制（已完成）
   - ✅ T03-04：实现Pod选择算法（已完成）
-  - ✅ T03-05：实现`CacheManager`缓存管理器（已完成）
-  - ✅ T03-06：实现`CacheConfig`缓存配置（已完成）
+  - ✅ T03-05：实现`CacheConfig`缓存配置（已完成）
+  - ✅ T03-06：实现`CacheEntry`缓存条目（已完成）
+  - ✅ T03-07：实现`CacheStats`缓存统计（已完成）
 
 ### A4 行动（Act）
-#### ✅ T03-01：定义`ServiceStateCache`接口和结构体（已完成）
+#### ✅ T03-01：定义`ServiceStateCacheImpl`接口和结构体（已完成）
 ```go
 // route/cache/state_cache.go
 package cache
@@ -73,66 +74,32 @@ import (
     "github.com/go-kratos/kratos/v2/route"
 )
 
-// ServiceStateCache 有状态服务状态缓存组件
-type ServiceStateCache struct {
+// ServiceStateCacheImpl 服务状态缓存实现
+type ServiceStateCacheImpl struct {
     mu sync.RWMutex
-    log log.Logger
-    
+
     // 配置
     config *route.StatefulBaseConfig
-    
-    // 依赖组件
+
+    // 日志记录器
+    logger log.Logger
+
+    // 路由信息驱动
     routeInfoDriver route.RouteInfoDriver
-    
-    // 缓存数据
-    routableStateCache map[string]map[string][]*route.StatefulServiceState // 可路由服务状态缓存
-    allServices        map[string]map[string]map[int]*route.StatefulServiceState // 存活服务状态缓存
-    
-    // 定时器
-    ticker    *time.Ticker
-    stopChan  chan struct{}
-    
-    // 工具
-    stateUtils *route.StateUtils
-}
 
-// NewServiceStateCache 创建新的服务状态缓存
-func NewServiceStateCache(
-    config *route.StatefulBaseConfig,
-    routeInfoDriver route.RouteInfoDriver,
-    logger log.Logger,
-) *ServiceStateCache {
-    return &ServiceStateCache{
-        config:            config,
-        routeInfoDriver:   routeInfoDriver,
-        log:               logger,
-        routableStateCache: make(map[string]map[string][]*route.StatefulServiceState),
-        allServices:        make(map[string]map[string]map[int]*route.StatefulServiceState),
-        stopChan:           make(chan struct{}),
-        stateUtils:         &route.StateUtils{},
-    }
-}
+    // 缓存存储
+    routableStateCache map[string]map[string][]*route.StatefulServiceState       // namespace -> serviceName -> states
+    allServices        map[string]map[string]map[int]*route.StatefulServiceState // namespace -> serviceName -> podId -> state
 
-// OnInitModule 模块初始化
-func (s *ServiceStateCache) OnInitModule() error {
-    s.log.Log(log.LevelInfo, "ServiceStateCache initializing...")
-    
-    // 启动定时更新
-    s.startTicker()
-    
-    s.log.Log(log.LevelInfo, "ServiceStateCache initialized successfully")
-    return nil
-}
+    // 缓存统计
+    stats *CacheStats
 
-// OnCloseModule 模块关闭
-func (s *ServiceStateCache) OnCloseModule() error {
-    s.log.Log(log.LevelInfo, "ServiceStateCache closing...")
-    
-    // 停止定时器
-    s.stopTicker()
-    
-    s.log.Log(log.LevelInfo, "ServiceStateCache closed successfully")
-    return nil
+    // 控制通道
+    stopCh chan struct{}
+    wg     sync.WaitGroup
+
+    // 初始化状态
+    initialized bool
 }
 ```
 
@@ -141,97 +108,44 @@ func (s *ServiceStateCache) OnCloseModule() error {
 // route/cache/state_cache.go
 package cache
 
-// GetServiceBestPod 从缓存或storage获取目标服务最佳pod
-func (s *ServiceStateCache) GetServiceBestPod(ctx context.Context, namespace, serviceName string) (int, error) {
-    s.mu.RLock()
-    routableServices, exists := s.routableStateCache[namespace][serviceName]
-    s.mu.RUnlock()
-    
-    if !exists || len(routableServices) == 0 {
-        // 从来没有获取过，去storage获取
-        err := s.updateServicePromise(ctx, namespace, serviceName)
-        if err != nil {
-            return 0, err
-        }
-        
-        s.mu.RLock()
-        routableServices = s.routableStateCache[namespace][serviceName]
-        s.mu.RUnlock()
+// NewServiceStateCache 创建新的服务状态缓存
+func NewServiceStateCache(config *route.StatefulBaseConfig, logger log.Logger, routeInfoDriver route.RouteInfoDriver) *ServiceStateCacheImpl {
+    if config == nil {
+        config = route.DefaultStatefulBaseConfig()
     }
     
-    if len(routableServices) == 0 {
-        return 0, route.ErrServiceNotReady
+    return &ServiceStateCacheImpl{
+        config:            config,
+        logger:            logger,
+        routeInfoDriver:   routeInfoDriver,
+        routableStateCache: make(map[string]map[string][]*route.StatefulServiceState),
+        allServices:        make(map[string]map[string]map[int]*route.StatefulServiceState),
+        stats:              &CacheStats{},
+        stopCh:             make(chan struct{}),
     }
-    
-    // 使用随机算法选择Pod
-    return s.getPod(routableServices), nil
 }
 
-// IsPodAvailable 检查Pod是否可用
-func (s *ServiceStateCache) IsPodAvailable(namespace, serviceName string, podIndex int) bool {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+// OnInitModule 模块初始化
+func (s *ServiceStateCacheImpl) OnInitModule() error {
+    s.logger.Log(log.LevelInfo, "ServiceStateCache initializing...")
     
-    if allServices, exists := s.allServices[namespace]; exists {
-        if serviceMap, exists := allServices[serviceName]; exists {
-            _, exists := serviceMap[podIndex]
-            return exists
-        }
-    }
-    return false
+    // 启动定时更新
+    s.startTicker()
+    
+    s.initialized = true
+    s.logger.Log(log.LevelInfo, "ServiceStateCache initialized successfully")
+    return nil
 }
 
-// IsPodRoutable 检查Pod是否可路由
-func (s *ServiceStateCache) IsPodRoutable(namespace, serviceName string, podIndex int) bool {
-    if !s.IsPodAvailable(namespace, serviceName, podIndex) {
-        return false
-    }
+// OnCloseModule 模块关闭
+func (s *ServiceStateCacheImpl) OnCloseModule() error {
+    s.logger.Log(log.LevelInfo, "ServiceStateCache closing...")
     
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+    // 停止定时器
+    s.stopTicker()
     
-    if allServices, exists := s.allServices[namespace]; exists {
-        if serviceMap, exists := allServices[serviceName]; exists {
-            if service, exists := serviceMap[podIndex]; exists {
-                return service.RoutingState == route.RoutingStateReady
-            }
-        }
-    }
-    return false
-}
-
-// AlivePods 获取存活Pod
-func (s *ServiceStateCache) AlivePods(namespace, serviceName string) map[int]*route.StatefulServiceState {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-    
-    if allServices, exists := s.allServices[namespace]; exists {
-        if serviceMap, exists := allServices[serviceName]; exists {
-            result := make(map[int]*route.StatefulServiceState)
-            for podIndex, service := range serviceMap {
-                result[podIndex] = service
-            }
-            return result
-        }
-    }
-    return make(map[int]*route.StatefulServiceState)
-}
-
-// RoutablePods 获取可路由Pod
-func (s *ServiceStateCache) RoutablePods(namespace, serviceName string) map[int]*route.StatefulServiceState {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-    
-    if routableServices, exists := s.routableStateCache[namespace]; exists {
-        if serviceList, exists := routableServices[serviceName]; exists {
-            result := make(map[int]*route.StatefulServiceState)
-            for _, service := range serviceList {
-                result[service.PodID] = service
-            }
-            return result
-        }
-    }
-    return make(map[int]*route.StatefulServiceState)
+    s.logger.Log(log.LevelInfo, "ServiceStateCache closed successfully")
+    return nil
 }
 ```
 
@@ -241,16 +155,19 @@ func (s *ServiceStateCache) RoutablePods(namespace, serviceName string) map[int]
 package cache
 
 // startTicker 启动定时器
-func (s *ServiceStateCache) startTicker() {
+func (s *ServiceStateCacheImpl) startTicker() {
     updatePeriod := time.Duration(s.config.StateCacheExpireSecs) * time.Second
-    s.ticker = time.NewTicker(updatePeriod)
+    ticker := time.NewTicker(updatePeriod)
     
+    s.wg.Add(1)
     go func() {
+        defer s.wg.Done()
         for {
             select {
-            case <-s.ticker.C:
+            case <-ticker.C:
                 s.run()
-            case <-s.stopChan:
+            case <-s.stopCh:
+                ticker.Stop()
                 return
             }
         }
@@ -258,16 +175,14 @@ func (s *ServiceStateCache) startTicker() {
 }
 
 // stopTicker 停止定时器
-func (s *ServiceStateCache) stopTicker() {
-    if s.ticker != nil {
-        s.ticker.Stop()
-    }
-    close(s.stopChan)
+func (s *ServiceStateCacheImpl) stopTicker() {
+    close(s.stopCh)
+    s.wg.Wait()
 }
 
 // run 定时更新缓存
-func (s *ServiceStateCache) run() {
-    s.log.Log(log.LevelDebug, "ServiceStateCache updating...")
+func (s *ServiceStateCacheImpl) run() {
+    s.logger.Log(log.LevelDebug, "ServiceStateCache updating...")
     
     s.mu.RLock()
     if len(s.allServices) == 0 {
@@ -298,28 +213,6 @@ func (s *ServiceStateCache) run() {
         }(task.namespace, task.serviceName)
     }
 }
-
-// updateService 更新指定服务
-func (s *ServiceStateCache) updateService(ctx context.Context, namespace, serviceName string) {
-    services, err := s.routeInfoDriver.GetAllServiceState(ctx, namespace, serviceName)
-    if err != nil {
-        s.log.Log(log.LevelError, "Failed to update service", "namespace", namespace, "service", serviceName, "error", err)
-        return
-    }
-    
-    s.processRet(namespace, serviceName, services)
-}
-
-// updateServicePromise 更新服务Promise版本
-func (s *ServiceStateCache) updateServicePromise(ctx context.Context, namespace, serviceName string) error {
-    services, err := s.routeInfoDriver.GetAllServiceState(ctx, namespace, serviceName)
-    if err != nil {
-        return err
-    }
-    
-    s.processRet(namespace, serviceName, services)
-    return nil
-}
 ```
 
 #### ✅ T03-04：实现Pod选择算法（已完成）
@@ -327,8 +220,34 @@ func (s *ServiceStateCache) updateServicePromise(ctx context.Context, namespace,
 // route/cache/state_cache.go
 package cache
 
+// GetServiceBestPod 从缓存或storage获取目标服务最佳pod
+func (s *ServiceStateCacheImpl) GetServiceBestPod(ctx context.Context, namespace, serviceName string) (int, error) {
+    s.mu.RLock()
+    routableServices, exists := s.routableStateCache[namespace][serviceName]
+    s.mu.RUnlock()
+    
+    if !exists || len(routableServices) == 0 {
+        // 从来没有获取过，去storage获取
+        err := s.updateServicePromise(ctx, namespace, serviceName)
+        if err != nil {
+            return 0, err
+        }
+        
+        s.mu.RLock()
+        routableServices = s.routableStateCache[namespace][serviceName]
+        s.mu.RUnlock()
+    }
+    
+    if len(routableServices) == 0 {
+        return 0, route.ErrServiceNotReady
+    }
+    
+    // 使用随机算法选择Pod
+    return s.getPod(routableServices), nil
+}
+
 // getPod 从缓存中分配一个服务实例
-func (s *ServiceStateCache) getPod(routableServices []*route.StatefulServiceState) int {
+func (s *ServiceStateCacheImpl) getPod(routableServices []*route.StatefulServiceState) int {
     if len(routableServices) == 0 {
         return 0
     }
@@ -336,196 +255,74 @@ func (s *ServiceStateCache) getPod(routableServices []*route.StatefulServiceStat
     // 使用随机算法选择Pod
     return routableServices[time.Now().UnixNano()%int64(len(routableServices))].PodID
 }
-
-// processRet 处理服务状态更新结果
-func (s *ServiceStateCache) processRet(namespace, serviceName string, services map[int]*route.StatefulServiceState) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    
-    if len(services) == 0 {
-        // 没有存活pod，用空集合标识
-        if s.routableStateCache[namespace] == nil {
-            s.routableStateCache[namespace] = make(map[string][]*route.StatefulServiceState)
-        }
-        if s.allServices[namespace] == nil {
-            s.allServices[namespace] = make(map[string]map[int]*route.StatefulServiceState)
-        }
-        
-        s.routableStateCache[namespace][serviceName] = []*route.StatefulServiceState{}
-        s.allServices[namespace][serviceName] = make(map[int]*route.StatefulServiceState)
-        return
-    }
-    
-    // 获取之前的服务状态
-    preAll := s.allServices[namespace][serviceName]
-    if preAll == nil {
-        preAll = make(map[int]*route.StatefulServiceState)
-    }
-    
-    // 缓存符合条件的service
-    rangeConfig := s.config.ServiceRangeConfig[serviceName]
-    if rangeConfig == 0 {
-        rangeConfig = 500 // 默认范围
-    }
-    
-    // 按负载状态排序
-    serviceList := s.stateUtils.SortByLoadState(services)
-    
-    // 找出最小值
-    var minLoadState int = -rangeConfig - 1
-    for _, service := range serviceList {
-        if service.RoutingState == route.RoutingStateReady {
-            minLoadState = service.LoadState
-            s.log.Log(log.LevelDebug, "minLoadState svc", "service", serviceName, "state", minLoadState)
-            break
-        }
-    }
-    
-    limit := minLoadState + rangeConfig
-    
-    // 寻找goodServices
-    var goodServices []*route.StatefulServiceState
-    for _, service := range serviceList {
-        if service.LoadState <= limit && service.RoutingState == route.RoutingStateReady {
-            goodServices = append(goodServices, service)
-        }
-        
-        // 检查路由状态变更
-        if preService, exists := preAll[service.PodID]; exists {
-            if preService.RoutingState != service.RoutingState {
-                s.log.Log(log.LevelInfo, "routing state changed", 
-                    "service", serviceName, "pod", service.PodID, 
-                    "pre", preService.RoutingState, "now", service.RoutingState)
-                // 状态变更日志记录，不进行回调处理
-            }
-        }
-    }
-    
-    // 更新缓存
-    if s.routableStateCache[namespace] == nil {
-        s.routableStateCache[namespace] = make(map[string][]*route.StatefulServiceState)
-    }
-    if s.allServices[namespace] == nil {
-        s.allServices[namespace] = make(map[string]map[int]*route.StatefulServiceState)
-    }
-    
-    s.routableStateCache[namespace][serviceName] = goodServices
-    s.allServices[namespace][serviceName] = services
-}
 ```
 
-#### ✅ T03-05：实现`CacheManager`缓存管理器（已完成）
+#### ✅ T03-05：实现`CacheConfig`缓存配置（已完成）
 ```go
-// route/cache/cache_manager.go
+// route/cache/state_cache.go
 package cache
-
-import (
-    "sync"
-    "github.com/go-kratos/kratos/v2/log"
-)
-
-// CacheManager 缓存管理器，统一管理所有缓存
-type CacheManager struct {
-    mu sync.RWMutex
-    log log.Logger
-    
-    // 缓存组件映射
-    caches map[string]interface{}
-    
-    // 配置
-    config *CacheConfig
-}
-
-// NewCacheManager 创建新的缓存管理器
-func NewCacheManager(config *CacheConfig, logger log.Logger) *CacheManager {
-    return &CacheManager{
-        log:    logger,
-        caches: make(map[string]interface{}),
-        config: config,
-    }
-}
-
-// RegisterCache 注册缓存组件
-func (cm *CacheManager) RegisterCache(name string, cache interface{}) {
-    cm.mu.Lock()
-    defer cm.mu.Unlock()
-    cm.caches[name] = cache
-    cm.log.Log(log.LevelInfo, "Cache registered", "name", name)
-}
-
-// GetCache 获取缓存组件
-func (cm *CacheManager) GetCache(name string) (interface{}, bool) {
-    cm.mu.RLock()
-    defer cm.mu.RUnlock()
-    cache, exists := cm.caches[name]
-    return cache, exists
-}
-
-// ClearAll 清空所有缓存
-func (cm *CacheManager) ClearAll() {
-    cm.mu.Lock()
-    defer cm.mu.Unlock()
-    cm.caches = make(map[string]interface{})
-    cm.log.Log(log.LevelInfo, "All caches cleared")
-}
-```
-
-#### ✅ T03-06：实现`CacheConfig`缓存配置（已完成）
-```go
-// route/cache/cache_config.go
-package cache
-
-import "time"
 
 // CacheConfig 缓存配置
 type CacheConfig struct {
-    // 默认过期时间
-    DefaultExpireTime time.Duration `json:"defaultExpireTime"`
-    
-    // 清理间隔
-    CleanupInterval time.Duration `json:"cleanupInterval"`
-    
+    // 缓存更新间隔（秒）
+    UpdateInterval time.Duration `json:"updateInterval"`
+    // 缓存过期时间（秒）
+    ExpirationTime time.Duration `json:"expirationTime"`
     // 最大缓存条目数
-    MaxEntries int `json:"maxEntries"`
-    
-    // 缓存策略
-    Strategy CacheStrategy `json:"strategy"`
-}
-
-// CacheStrategy 缓存策略
-type CacheStrategy int
-
-const (
-    // CacheStrategyLRU 最近最少使用
-    CacheStrategyLRU CacheStrategy = iota
-    // CacheStrategyLFU 最不经常使用
-    CacheStrategyLFU
-    // CacheStrategyFIFO 先进先出
-    CacheStrategyFIFO
-)
-
-// String 转换为字符串
-func (c CacheStrategy) String() string {
-    switch c {
-    case CacheStrategyLRU:
-        return "LRU"
-    case CacheStrategyLFU:
-        return "LFU"
-    case CacheStrategyFIFO:
-        return "FIFO"
-    default:
-        return "UNKNOWN"
-    }
+    MaxCacheEntries int `json:"maxCacheEntries"`
+    // 启用缓存预热
+    EnableWarmup bool `json:"enableWarmup"`
 }
 
 // DefaultCacheConfig 默认缓存配置
 func DefaultCacheConfig() *CacheConfig {
     return &CacheConfig{
-        DefaultExpireTime: 5 * time.Minute,
-        CleanupInterval:   1 * time.Minute,
-        MaxEntries:        10000,
-        Strategy:          CacheStrategyLRU,
+        UpdateInterval:  30 * time.Second,
+        ExpirationTime:  300 * time.Second,
+        MaxCacheEntries: 10000,
+        EnableWarmup:    true,
     }
+}
+```
+
+#### ✅ T03-06：实现`CacheEntry`缓存条目（已完成）
+```go
+// route/cache/state_cache.go
+package cache
+
+// CacheEntry 缓存条目
+type CacheEntry struct {
+    Data        interface{} `json:"data"`
+    ExpireAt    time.Time   `json:"expireAt"`
+    LastAccess  time.Time   `json:"lastAccess"`
+    AccessCount int64       `json:"accessCount"`
+}
+
+// IsExpired 检查缓存条目是否过期
+func (e *CacheEntry) IsExpired() bool {
+    return time.Now().After(e.ExpireAt)
+}
+
+// Touch 更新访问时间和计数
+func (e *CacheEntry) Touch() {
+    e.LastAccess = time.Now()
+    e.AccessCount++
+}
+```
+
+#### ✅ T03-07：实现`CacheStats`缓存统计（已完成）
+```go
+// route/cache/state_cache.go
+package cache
+
+// CacheStats 缓存统计信息
+type CacheStats struct {
+    TotalEntries      int64         `json:"totalEntries"`
+    HitCount          int64         `json:"hitCount"`
+    MissCount         int64         `json:"missCount"`
+    UpdateCount       int64         `json:"updateCount"`
+    LastUpdateTime    time.Time     `json:"lastUpdateTime"`
+    AverageUpdateTime time.Duration `json:"averageUpdateTime"`
 }
 ```
 
@@ -549,7 +346,7 @@ func DefaultCacheConfig() *CacheConfig {
 - 性能优化：缓存更新策略已优化，减少不必要的更新
 - 功能扩展：支持更多缓存策略和过期机制
 - 观测性增强：已添加缓存命中率监控和性能指标
-- 下一步任务链接：Task-04 实现StatefulRedisExecutor Redis执行器
+- 下一步任务链接：Task-04 实现StatefulRedisExecutor Redis执行器（已在executor模块中实现）
 
 ### 📋 质量检查
 - [x] 代码质量检查完成
@@ -562,7 +359,12 @@ Task-03已成功完成，ServiceStateCache缓存组件已完全实现，包括�
 2. 缓存数据结构和管理
 3. 定时更新机制
 4. Pod选择算法
-5. 缓存管理器和配置
+5. 缓存配置、条目和统计
 6. 并发安全和性能优化
 
-代码已通过编译测试，符合Go语言最佳实践和Kratos框架规范。下一步将进行Task-04的实现。
+**重要更新**：缓存组件已与实际实现保持一致，特别是：
+- 使用 `ServiceStateCacheImpl` 作为主实现类
+- 包含完整的缓存配置、条目和统计功能
+- 支持定时更新和并发安全
+
+**当前状态**：所有核心任务已完成，Driver模块开发完成。

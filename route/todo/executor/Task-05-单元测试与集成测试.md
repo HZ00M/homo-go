@@ -1,105 +1,393 @@
 ## 6A 任务卡：单元测试与集成测试
 
 - 编号: Task-05
-- 模块: tpf-service-driver-stateful-redis-utils-go
+- 模块: route/executor
 - 责任人: 待分配
 - 优先级: 🟡 中
 - 状态: ❌ 未开始
-- 预计完成时间: 待定
+- 预计完成时间: -
 - 实际完成时间: -
 
 ### A1 目标（Aim）
-
-建立完整的测试体系，包括单元测试、集成测试和性能测试，确保代码质量和功能正确性。实现测试覆盖率≥80%，并提供可靠的回归测试保障，支持持续集成和部署。
+为有状态服务执行器实现完整的单元测试和集成测试，确保代码质量和功能正确性，支持测试覆盖率≥80%，为后续的性能优化和监控提供可靠的测试基础。
 
 ### A2 分析（Analyze）
-
 - **现状**：
-  - ✅ 已实现：Java版本的测试用例
-  - ✅ 已实现：Go语言版本的核心功能已在stateful_executor.go中完成
-  - 🔄 部分实现：部分测试代码已创建（interface_test.go）
-  - ❌ 未实现：完整的测试体系和测试用例
+  - ✅ 已实现：核心功能已在 `stateful_executor.go` 中完成
+  - ✅ 已完成：接口实现测试已在 `interface_test.go` 中完成
+  - ❌ 未实现：完整的单元测试和集成测试
+  - ❌ 未实现：测试覆盖率统计
 - **差距**：
-  - 需要编写所有核心功能的单元测试
-  - 需要建立Redis集成的测试环境
+  - 需要实现所有方法的单元测试
+  - 需要实现Redis集成的集成测试
   - 需要实现性能基准测试
+  - 需要实现测试覆盖率统计
 - **约束**：
-  - 必须使用Go语言标准测试框架
-  - 必须支持测试环境的快速搭建
-  - 必须提供测试数据的清理机制
+  - 必须保持与Java版本功能的兼容性
+  - 必须符合Go语言的测试规范
+  - 必须支持Kratos框架的测试
 - **风险**：
-  - 技术风险：测试环境的不稳定性
-  - 业务风险：测试覆盖不足导致质量问题
-  - 依赖风险：外部依赖（Redis）的可用性
+  - 测试覆盖率不足可能导致质量问题
+  - 集成测试需要Redis环境支持
 
 ### A3 设计（Architect）
-
 - **接口契约**：
-  - **核心接口**：`TestSuite` - 测试套件接口
-  - **核心方法**：
-    - `SetupTest() error`
-    - `TeardownTest() error`
-    - `RunTests() error`
-  - **核心接口**：`MockRedisManager` - Redis管理器模拟接口
-  - **核心方法**：
-    - `GetConnection(ctx context.Context) (*redis.Client, error)`
-    - `ExecuteScript(ctx context.Context, script string, keys []string, args []interface{}) (interface{}, error)`
-    - `HealthCheck(ctx context.Context) error`
-  - **输入输出参数及错误码**：
-    - 支持测试数据的设置和验证
-    - 提供测试结果的详细报告
-    - 支持测试性能的统计分析
+  - **核心功能**：单元测试、集成测试、性能测试
+  - **核心特性**：
+    - 使用Go标准测试框架
+    - 支持Mock和Stub测试
+    - 支持测试覆盖率统计
+    - 支持性能基准测试
 
 - **架构设计**：
-  - 采用单一文件架构，测试 `stateful_executor.go` 中的所有功能
-  - 采用测试驱动开发（TDD）模式
-  - 使用模拟对象隔离外部依赖
-  - 实现测试数据的自动清理
-  - 支持并行测试和测试报告
-  - **数据模型**: 测试 `types.go` 中定义的所有数据模型和类型，确保类型一致性
+  - 采用单文件架构，所有测试围绕 `StatefulExecutorImpl` 进行
+  - 使用 `testify` 框架进行断言和Mock
+  - 支持Redis集成测试和Mock测试
+  - 支持并发测试和性能测试
 
 - **核心功能模块**：
-  - `UnitTests`: 单元测试集合（executor_test.go）
-- `IntegrationTests`: 集成测试集合（redis_integration_test.go）
-- `PerformanceTests`: 性能测试集合
-- `TestUtils`: 测试工具函数
+  - `UnitTests`: 单元测试集合
+  - `IntegrationTests`: 集成测试集合
+  - `PerformanceTests`: 性能测试集合
+  - `TestHelpers`: 测试辅助工具
 
 - **极小任务拆分**：
-  - T05-01：实现核心接口的单元测试
-  - T05-02：实现Redis操作的集成测试
-  - T05-03：实现Lua脚本的测试
-  - T05-04：实现性能基准测试
-  - T05-05：建立测试环境和CI/CD集成
+  - T05-01：实现服务状态管理单元测试
+  - T05-02：实现工作负载状态管理单元测试
+  - T05-03：实现Pod链接管理单元测试
+  - T05-04：实现Redis集成测试
+  - T05-05：实现性能基准测试
+  - T05-06：实现测试覆盖率统计
 
 ### A4 行动（Act）
+#### T05-01：实现服务状态管理单元测试
+```go
+// route/executor/stateful_executor_test.go
+package executor
 
-1. 编写所有核心接口的单元测试
-2. 建立Redis测试环境
-3. 实现集成测试用例
-4. 编写性能基准测试
-5. 配置测试覆盖率报告
-6. 集成到CI/CD流程
+import (
+    "context"
+    "testing"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/mock"
+    "github.com/redis/go-redis/v9"
+)
+
+// MockRedisClient Redis客户端Mock
+type MockRedisClient struct {
+    mock.Mock
+}
+
+func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+    args := m.Called(ctx, key, values)
+    return args.Get(0).(*redis.IntCmd)
+}
+
+func (m *MockRedisClient) HGetAll(ctx context.Context, key string) *redis.StringStringMapCmd {
+    args := m.Called(ctx, key)
+    return args.Get(0).(*redis.StringStringMapCmd)
+}
+
+// TestSetServiceState 测试设置服务状态
+func TestSetServiceState(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    serviceName := "test-service"
+    podID := 1
+    state := "running"
+
+    // 设置期望
+    mockClient.On("HSet", ctx, mock.AnythingOfType("string"), "1", state).
+        Return(redis.NewIntCmd(ctx))
+
+    // 执行测试
+    err := executor.SetServiceState(ctx, namespace, serviceName, podID, state)
+
+    // 验证结果
+    assert.NoError(t, err)
+    mockClient.AssertExpectations(t)
+}
+
+// TestGetServiceState 测试获取服务状态
+func TestGetServiceState(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    serviceName := "test-service"
+
+    // 设置期望
+    expectedStates := map[string]string{
+        "0": "running",
+        "1": "ready",
+    }
+    mockClient.On("HGetAll", ctx, mock.AnythingOfType("string")).
+        Return(redis.NewStringStringMapCmd(ctx, expectedStates))
+
+    // 执行测试
+    states, err := executor.GetServiceState(ctx, namespace, serviceName)
+
+    // 验证结果
+    assert.NoError(t, err)
+    assert.Equal(t, map[int]string{0: "running", 1: "ready"}, states)
+    mockClient.AssertExpectations(t)
+}
+```
+
+#### T05-02：实现工作负载状态管理单元测试
+```go
+// route/executor/stateful_executor_test.go
+package executor
+
+// TestSetWorkloadState 测试设置工作负载状态
+func TestSetWorkloadState(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    serviceName := "test-service"
+    state := "healthy"
+
+    // 设置期望
+    mockClient.On("Set", ctx, mock.AnythingOfType("string"), state, mock.AnythingOfType("time.Duration")).
+        Return(redis.NewStatusCmd(ctx))
+
+    // 执行测试
+    err := executor.SetWorkloadState(ctx, namespace, serviceName, state)
+
+    // 验证结果
+    assert.NoError(t, err)
+    mockClient.AssertExpectations(t)
+}
+
+// TestGetWorkloadStateBatch 测试批量获取工作负载状态
+func TestGetWorkloadStateBatch(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    serviceNames := []string{"service1", "service2"}
+
+    // 设置期望
+    expectedValues := []interface{}{"healthy", "unhealthy"}
+    mockClient.On("MGet", ctx, mock.AnythingOfType("[]string")).
+        Return(redis.NewSliceCmd(ctx, expectedValues...))
+
+    // 执行测试
+    states, err := executor.GetWorkloadStateBatch(ctx, namespace, serviceNames)
+
+    // 验证结果
+    assert.NoError(t, err)
+    assert.Equal(t, map[string]string{"service1": "healthy", "service2": "unhealthy"}, states)
+    mockClient.AssertExpectations(t)
+}
+```
+
+#### T05-03：实现Pod链接管理单元测试
+```go
+// route/executor/stateful_executor_test.go
+package executor
+
+// TestSetLinkedPod 测试设置Pod链接
+func TestSetLinkedPod(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    uid := "test-uid"
+    serviceName := "test-service"
+    podID := 1
+    persistSeconds := 3600
+
+    // 设置期望
+    mockClient.On("Eval", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("[]interface{}")).
+        Return(redis.NewCmd(ctx, []interface{}{"1"}))
+
+    // 执行测试
+    result, err := executor.SetLinkedPod(ctx, namespace, uid, serviceName, podID, persistSeconds)
+
+    // 验证结果
+    assert.NoError(t, err)
+    assert.Equal(t, 1, result)
+    mockClient.AssertExpectations(t)
+}
+
+// TestGetLinkedPod 测试获取Pod链接
+func TestGetLinkedPod(t *testing.T) {
+    mockClient := new(MockRedisClient)
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(mockClient, logger)
+
+    ctx := context.Background()
+    namespace := "default"
+    uid := "test-uid"
+    serviceName := "test-service"
+
+    // 设置期望
+    mockClient.On("Get", ctx, mock.AnythingOfType("string")).
+        Return(redis.NewStringCmd(ctx, "1"))
+
+    // 执行测试
+    podID, err := executor.GetLinkedPod(ctx, namespace, uid, serviceName)
+
+    // 验证结果
+    assert.NoError(t, err)
+    assert.Equal(t, 1, podID)
+    mockClient.AssertExpectations(t)
+}
+```
+
+#### T05-04：实现Redis集成测试
+```go
+// route/executor/stateful_executor_integration_test.go
+package executor
+
+import (
+    "context"
+    "testing"
+    "github.com/redis/go-redis/v9"
+    "github.com/stretchr/testify/assert"
+)
+
+// TestRedisIntegration 测试Redis集成
+func TestRedisIntegration(t *testing.T) {
+    if testing.Short() {
+        t.Skip("跳过集成测试")
+    }
+
+    // 创建Redis客户端
+    client := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+        DB:   1, // 使用测试数据库
+    })
+    defer client.Close()
+
+    // 创建执行器
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(client, logger)
+
+    ctx := context.Background()
+    namespace := "test"
+    serviceName := "integration-test"
+    podID := 0
+    state := "running"
+
+    // 测试设置服务状态
+    err := executor.SetServiceState(ctx, namespace, serviceName, podID, state)
+    assert.NoError(t, err)
+
+    // 测试获取服务状态
+    states, err := executor.GetServiceState(ctx, namespace, serviceName)
+    assert.NoError(t, err)
+    assert.Equal(t, state, states[podID])
+
+    // 清理测试数据
+    client.Del(ctx, executor.formatServiceStateRedisKey(namespace, serviceName))
+}
+```
+
+#### T05-05：实现性能基准测试
+```go
+// route/executor/stateful_executor_benchmark_test.go
+package executor
+
+import (
+    "context"
+    "testing"
+    "github.com/redis/go-redis/v9"
+)
+
+// BenchmarkSetServiceState 基准测试设置服务状态
+func BenchmarkSetServiceState(b *testing.B) {
+    client := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+        DB:   1,
+    })
+    defer client.Close()
+
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(client, logger)
+
+    ctx := context.Background()
+    namespace := "benchmark"
+    serviceName := "benchmark-service"
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        podID := i % 10
+        state := "running"
+        err := executor.SetServiceState(ctx, namespace, serviceName, podID, state)
+        if err != nil {
+            b.Fatal(err)
+        }
+    }
+}
+
+// BenchmarkGetServiceState 基准测试获取服务状态
+func BenchmarkGetServiceState(b *testing.B) {
+    client := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+        DB:   1,
+    })
+    defer client.Close()
+
+    logger := &MockLogger{}
+    executor := NewStatefulExecutor(client, logger)
+
+    ctx := context.Background()
+    namespace := "benchmark"
+    serviceName := "benchmark-service"
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := executor.GetServiceState(ctx, namespace, serviceName)
+        if err != nil {
+            b.Fatal(err)
+        }
+    }
+}
+```
+
+#### T05-06：实现测试覆盖率统计
+```bash
+# 运行测试并生成覆盖率报告
+go test -cover -coverprofile=coverage.out ./executor/
+go tool cover -html=coverage.out -o coverage.html
+go tool cover -func=coverage.out
+```
 
 ### A5 验证（Assure）
-
 - **测试用例**：
-  - 所有核心功能的单元测试
-  - 边界条件和异常情况测试
-  - 并发操作的正确性测试
-  - 与Java版本的功能一致性测试
+  - [ ] 服务状态管理测试
+  - [ ] 工作负载状态管理测试
+  - [ ] Pod链接管理测试
+  - [ ] Redis集成测试
+  - [ ] 性能基准测试
 - **性能验证**：
-  - 测试执行性能基准
-  - 测试覆盖率统计
-  - 测试报告生成
-- **回归测试**：确保新功能不影响现有功能
-- **测试结果**：测试覆盖率≥80%，所有测试通过
+  - [ ] 测试覆盖率 ≥80%
+  - [ ] 性能基准测试通过
+- **回归测试**：
+  - [ ] 所有现有功能测试通过
+- **测试结果**：
+  - [ ] 待实现
 
 ### A6 迭代（Advance）
-
-- 性能优化：测试执行性能优化
-- 功能扩展：添加更多测试场景
-- 观测性增强：测试报告和监控改进
-- 下一步任务链接：Task-06 性能优化与监控（优化stateful_executor.go）
+- 性能优化：基于测试结果进行性能优化
+- 功能扩展：支持更多测试场景
+- 观测性增强：添加测试监控和报告
+- 下一步任务链接：Task-06 性能优化与监控（待开始）
 
 ### 📋 质量检查
 - [ ] 代码质量检查完成
@@ -107,23 +395,12 @@
 - [ ] 测试质量检查完成
 
 ### 📋 完成总结
+Task-05待开始，需要实现完整的单元测试和集成测试，包括：
+1. 所有方法的单元测试
+2. Redis集成的集成测试
+3. 性能基准测试
+4. 测试覆盖率统计
+5. 支持测试环境配置
+6. 为后续性能优化提供测试基础
 
-待完成
-
-**架构调整说明**: 本任务将与其他5个任务一起，将所有功能集成到 `stateful_executor.go` 单一文件中，实现架构极简化。
-
----
-
-## 📋 架构调整说明
-
-### 最新调整 (2025-01-27)
-- **架构大幅简化**: 将所有功能模块合并到 `stateful_executor.go` 单一文件
-- **功能完全集成**: 接口定义、Redis管理、业务逻辑、错误处理、日志系统全部集成
-- **接口统一**: 通过单一实现类提供完整的有状态服务管理能力
-- **架构极简化**: 极大减少模块间依赖，提升代码内聚性和维护性
-
-### 调整后的优势
-1. **极大减少文件数量**: 从12个功能文件合并为1个主要实现文件
-2. **极大降低复杂度**: 消除所有模块间接口调用，极简架构
-3. **提升开发效率**: 单一文件包含所有功能，便于理解和修改
-4. **便于维护**: 所有相关功能集中管理，调试和优化更简单
+下一步将进行Task-06的实现。

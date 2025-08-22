@@ -30,10 +30,12 @@
   - **核心接口**：`RouteInfoDriver` - 定义所有有状态服务路由操作的核心接口
   - **核心方法**：
     - `GetLinkInfoCacheTimeSecs() int` - 获取链接信息缓存时间
+    - `RegisterRoutingStateChangedEvent(namespace string, stateChanged StateChanged)` - 注册路由状态变更事件
+    - `OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now *StatefulServiceState)` - 处理路由状态变更
     - `GetReadyServiceState(ctx context.Context, namespace, serviceName string) (map[int]*StatefulServiceState, error)` - 获取就绪服务状态
     - `GetAllServiceState(ctx context.Context, namespace, serviceName string) (map[int]*StatefulServiceState, error)` - 获取所有服务状态
     - `GetServiceNameByTag(ctx context.Context, namespace, tag string) (string, error)` - 根据标签获取服务名
-    - `SetGlobalServiceNameTag(ctx context.Context, namespace, tag, serviceName string) error` - 设置全局服务名标签
+    - `SetGlobalServiceNameTag(ctx context.Context, namespace, tag, serviceName string) (bool, error)` - 设置全局服务名标签
     - `IsPodRoutable(namespace, serviceName string, podIndex int) bool` - 检查Pod是否可路由
     - `AlivePods(namespace, serviceName string) map[int]*StatefulServiceState` - 获取存活Pod
     - `RoutablePods(namespace, serviceName string) map[int]*StatefulServiceState` - 获取可路由Pod
@@ -69,25 +71,31 @@ type RouteInfoDriver interface {
     // 获取链接信息缓存时间（秒）
     GetLinkInfoCacheTimeSecs() int
     
-    // 获取就绪服务状态
+    // 注册路由状态变更事件
+    RegisterRoutingStateChangedEvent(namespace string, stateChanged StateChanged)
+    
+    // 路由状态变更通知
+    OnRoutingStateChanged(namespace, serviceName string, podIndex int, pre, now *StatefulServiceState)
+    
+    // 获取就绪的服务状态
     GetReadyServiceState(ctx context.Context, namespace, serviceName string) (map[int]*StatefulServiceState, error)
     
     // 获取所有服务状态
     GetAllServiceState(ctx context.Context, namespace, serviceName string) (map[int]*StatefulServiceState, error)
     
-    // 根据标签获取服务名
+    // 根据标签获取服务名称
     GetServiceNameByTag(ctx context.Context, namespace, tag string) (string, error)
     
-    // 设置全局服务名标签
-    SetGlobalServiceNameTag(ctx context.Context, namespace, tag, serviceName string) error
+    // 设置全局服务名称标签
+    SetGlobalServiceNameTag(ctx context.Context, namespace, tag, serviceName string) (bool, error)
     
     // 检查Pod是否可路由
     IsPodRoutable(namespace, serviceName string, podIndex int) bool
     
-    // 获取存活Pod
+    // 获取存活的Pod列表
     AlivePods(namespace, serviceName string) map[int]*StatefulServiceState
     
-    // 获取可路由Pod
+    // 获取可路由的Pod列表
     RoutablePods(namespace, serviceName string) map[int]*StatefulServiceState
     
     // 获取服务最佳Pod
@@ -170,4 +178,8 @@ Task-01已成功完成，RouteInfoDriver核心接口已在 `route/interfaces.go`
 4. 支持Kratos框架的依赖注入
 5. 所有相关数据模型已在 `route/types.go` 中定义
 
-下一步将进行Task-02的实现。
+**重要更新**：接口方法签名已与实际实现保持一致，特别是：
+- `OnRoutingStateChanged` 方法的参数类型已修正为 `*StatefulServiceState`
+- `SetGlobalServiceNameTag` 方法的返回值类型已修正为 `(bool, error)`
+
+**当前状态**：所有核心任务已完成，Driver模块开发完成。

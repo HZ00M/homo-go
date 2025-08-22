@@ -36,35 +36,8 @@ func (s ServiceState) String() string {
 	}
 }
 
-// LoadState 负载状态枚举
+// LoadState 负载状态数值（数值越小表示负载越低）
 type LoadState int
-
-const (
-	LoadStateUnknown    LoadState = iota
-	LoadStateIdle                 // 空闲
-	LoadStateLow                  // 低负载
-	LoadStateMedium               // 中等负载
-	LoadStateHigh                 // 高负载
-	LoadStateOverloaded           // 过载
-)
-
-// String 返回负载状态的字符串表示
-func (l LoadState) String() string {
-	switch l {
-	case LoadStateIdle:
-		return "Idle"
-	case LoadStateLow:
-		return "Low"
-	case LoadStateMedium:
-		return "Medium"
-	case LoadStateHigh:
-		return "High"
-	case LoadStateOverloaded:
-		return "Overloaded"
-	default:
-		return "Unknown"
-	}
-}
 
 // RoutingState 路由状态枚举
 type RoutingState int
@@ -177,18 +150,6 @@ type StateChanged interface {
 	OnStateChanged(namespace, serviceName string, podID int, pre, now *StatefulServiceState)
 }
 
-// StatefulObjCallback 有状态对象回调接口
-type StatefulObjCallback interface {
-	OnSuccess(result interface{})
-	OnError(err error)
-}
-
-// ServerRedisCallback 服务端Redis回调接口
-type ServerRedisCallback interface {
-	OnSuccess(result interface{})
-	OnError(err error)
-}
-
 // ==================== 工具函数 ====================
 
 // IsPodAvailable 检查Pod是否可用
@@ -218,18 +179,19 @@ func GetPodLoadScore(state *StatefulServiceState) int {
 	// 基础分数
 	score := 100
 
-	// 根据负载状态调整分数
-	switch state.LoadState {
-	case LoadStateIdle:
-		score += 50
-	case LoadStateLow:
-		score += 30
-	case LoadStateMedium:
-		score += 10
-	case LoadStateHigh:
-		score -= 20
-	case LoadStateOverloaded:
-		score -= 50
+	// 根据负载状态数值调整分数（数值越小表示负载越低，分数越高）
+	// 直接使用数值比较，不需要枚举常量
+	switch {
+	case state.LoadState <= 1:
+		score += 50 // 空闲状态，最高分
+	case state.LoadState == 2:
+		score += 30 // 低负载，高分
+	case state.LoadState == 3:
+		score += 10 // 中等负载，中等分
+	case state.LoadState == 4:
+		score -= 20 // 高负载，减分
+	case state.LoadState >= 5:
+		score -= 50 // 过载状态，大幅减分
 	}
 
 	// 根据路由状态调整分数
