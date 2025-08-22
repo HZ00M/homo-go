@@ -1,0 +1,1 @@
+local a={}local b=ARGV[1]local c=ARGV[2]local d=tonumber(ARGV[3])local e=redis.call("GET",KEYS[1])if e then table.insert(a,e)else table.insert(a,'-1')end;redis.call("SET",KEYS[1],c)if d==-1 then redis.call("PERSIST",KEYS[1])redis.call("HSET",KEYS[2],b,c)else redis.call("EXPIRE",KEYS[1],d)redis.call("HDEL",KEYS[2],b)end;return a

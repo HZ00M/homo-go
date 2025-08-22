@@ -1,0 +1,1 @@
+local a=redis.call("GET",KEYS[1])if a==ARGV[3] then redis.call("DEL",KEYS[1])if ARGV[2]~="-1" then redis.call("EXPIRE",KEYS[1],tonumber(ARGV[2]))end;redis.call("HDEL",KEYS[2],ARGV[1])return {1}else return {0}end

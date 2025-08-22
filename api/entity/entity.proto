@@ -1,0 +1,89 @@
+syntax = "proto3";
+package kratos.api;
+option go_package = "github.com/go-kratos/kratos/v2/api/proto/kratos/api;entity";
+option java_multiple_files = true;
+option java_package = "com.syyx.tpf.entity.proto";     // 指定包名
+option java_outer_classname = "EntityMsg"; // 指定类名
+
+message EntityRequest {
+  string type = 1;
+  string id = 2;
+  int64 session = 3;
+  string funName = 4;
+  repeated bytes content = 5;
+//  repeated string callerTaskTags = 6; //调用者TaskTags
+//  string entityAbility = 7;   // ability类名
+}
+message EntityResponse{
+  enum RespCodeType //枚举消息类型
+  {
+    OK = 0;
+    FAILED = 1;
+  }
+  RespCodeType respCode  = 1;
+  int64 session = 2;
+  repeated bytes content = 3;
+
+}
+message BroadcastEntityRequest{
+  EntityRequest entityRequest = 1;
+  repeated string ids = 2;
+}
+//批量entity请求
+message BatchEntityRequest{
+  repeated EntityRequest entityRequests = 1;
+}
+
+message PingRequest{
+  float time = 1;
+  int64 timestamp = 2;
+  int32 pingSerial = 3;
+}
+
+message SubscribeRequest {
+  repeated string topics = 1; // 订阅的主题列表
+  string entityName = 2; // 订阅的实体类型
+  string entityId = 3; // 订阅的实体ID
+  string namespace = 4; // 命名空间 若无需跨命名空间 则不填
+}
+
+message PubSubRequest {
+  repeated string topics = 1; // 订阅的主题列表
+  string entityName = 2; // 订阅的实体类型
+  string entityId = 3; // 订阅的实体ID
+}
+
+
+message PubSubResponse{
+  enum RespCodeType //枚举消息类型
+  {
+    OK = 0;
+    ERROR = 1;
+    NOT_SUB = 2;
+    FAIL = 3;
+    EMPTY = 4;
+  }
+  RespCodeType respCode  = 1;
+}
+
+message PubSubAbilityMessage{
+  bytes content     = 1;
+}
+
+message PublishMessage{
+  bytes content     = 1;
+}
+
+message FixAbilityMessage{
+  string content    = 1;
+}
+
+message FixAbilityResponse{
+  enum RespCodeType //枚举消息类型
+  {
+    OK = 0;
+    FAILED = 1;
+  }
+  RespCodeType respCode  = 1;
+  string content    = 2;
+}

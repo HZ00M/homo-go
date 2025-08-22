@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package api.helloworld.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "helloworld/api/helloworld/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.helloworld.v1";
+
+service Demo2 {
+	// Sends a greeting
+	rpc Hi (Demo2Request) returns (Demo2Reply) {
+		option (google.api.http) = {
+			get: "/demo2/{name}"
+		};
+	}
+
+	rpc Hello (HelloReq) returns (HelloRep) {
+		option (google.api.http) = {
+			post: "/demo2/hello"
+			body: "*"
+		};
+	}
+}
+
+// The request message containing the user's name.
+message Demo2Request {
+	string name = 1;
+}
+
+// The response message containing the greetings
+message Demo2Reply {
+	string message = 1;
+}
+
+// The request message containing the user's name.
+message HelloReq {
+	string name = 1;
+	int32 age = 2;
+}
+
+// The response message containing the greetings
+message HelloRep {
+	string message = 1;
+	int32 code = 2;
+}
+
+

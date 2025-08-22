@@ -1,0 +1,105 @@
+syntax = "proto3";
+option go_package = "github.com/go-kratos/kratos/v2/api/proto/kratos/api;rpc";
+
+option java_multiple_files = true;
+option java_package = "io.tpf.service.rpc.proto";
+option java_outer_classname = "RpcTestProto";
+
+package rpc;
+
+service ProtoService {
+  rpc ProtoMethod (TestRequest) returns (TestResponse){}
+}
+message TestRequest {
+  int32 id = 1;
+  string name = 2;
+}
+message ParameterMsg {
+  string userId   = 1;
+  string channelId     = 2;
+  bytes extraContent = 3;
+  string appVersion = 4;
+  string resVersion = 5;
+  string antiCheatContent = 6;
+  string ip = 7;
+}
+message EntityRequest {
+  string type = 1;
+  string id = 2;
+  int64 session = 3;
+  string funName = 4;
+  repeated bytes content = 5;
+  repeated string callerTaskTags = 6; //调用者TaskTags
+  string entityAbility = 7;   // ability类名
+}
+message BroadcastEntityRequest{
+  EntityRequest entityRequest = 1;
+  repeated string ids = 2;
+}
+//批量entity请求
+message BatchEntityRequest{
+  repeated EntityRequest entityRequests = 1;
+}
+
+message TestResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PingRequest{
+  float time = 1;
+  int64 timestamp = 2;
+  int32 pingSerial = 3;
+}
+
+
+//收发协议
+message UserLoginRequest
+{
+  AccountInfo loginAccount = 1;
+}
+message AccountInfo
+{
+  // code review info by hulz: userId不用在协议里面带，
+  string userId = 1;
+  string userName = 2;
+  string token = 3;
+  string tokenL = 4;
+  int32 chanelId = 5;
+  int32 subChanelId = 6;//子渠道id
+  map<string, string> extraInfo = 7 ; //扩展信息 key->section value->id 0/null-不是 反支-切片id
+}
+//数据类型
+enum NihongMsg
+{
+  Default = 0;
+  Success = 1;
+  Fail = 2;
+
+  ParamError = 3;                       // 参数错误
+  ItemError = 4;                        // 材料不足
+  StateError = 5;                       // 状态错误
+  SensitiveError = 6;                   // 敏感词校验失败
+
+  PetNumLimitError = 10001;             // 宠物数量被限制
+  PetNotCostError = 10002;              // 宠物不可消耗
+  PetNotSkillError = 10003;             // 宠物没有技能
+  PetSkillLevelLimitError = 10004;      // 宠物技能等级限制
+  PetSkillReplaceError = 10005;         // 宠物技能不能替换
+  PetNumNotEnoughError = 100006;        // 宠物数量不足
+  PetSkillLevelOverError = 100008;      // 宠物技能等级超过
+  PetSkillNotExistError = 100009;       // 宠物技能不存在
+  PetSkillSuccessRateError = 100010;    // 宠物技能成功率错误
+  PetNotAllow = 100011;               // 宠物不允许选择
+  PetPoolNotAllowChoice = 100012;               // 卡池不允许选择
+  PetHatchCountNotEnough = 100013;     // 宠物孵化次数不足
+  PetHatchNotChice = 100014;     // 宠物池未选择宠物
+
+  Item_Repeat_Buy = 100015;               // 重复购买
+  Item_Not_Exist = 100016;               // 物品不存在
+  Item_Not_Enough = 100017;               // 物品不足
+}
+message UserLoginResponse
+{
+  NihongMsg msg = 1;
+}

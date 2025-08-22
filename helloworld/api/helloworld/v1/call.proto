@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+import "google/api/annotations.proto";
+
+option go_package = "helloworld/api/helloworld/v1;v1";
+
+option java_multiple_files = true;
+option java_package = "io.tpf.service.rpc.proto";
+option java_outer_classname = "TpfServiceCallProto";
+
+package rpc;
+
+service RouterService {
+  rpc JsonMessage (JsonReq) returns (JsonRsp) {
+    option (google.api.http) = {
+      post: "/rpc/JsonMessage"
+      body: "*"
+    };
+  }
+  rpc RpcCall(Req) returns (Rsp) {
+    option (google.api.http) = {
+      post: "/rpc/RpcCall"
+      body: "*"
+    };
+  }
+  rpc StreamCall(stream StreamReq) returns (stream StreamRsp) {}
+}
+
+
+message Req {
+  string srcService = 1;
+  string msgId = 2;
+  repeated bytes msgContent = 3;
+}
+
+
+message TraceInfo{
+  int64 traceid = 1;
+  int64 spanid = 2;
+  bool  sample = 3;
+}
+
+message StreamReq {
+  string srcService = 1;
+  string msgId = 2;
+  repeated bytes msgContent = 3;
+  string reqId = 4;
+  TraceInfo traceinfo = 5;
+}
+
+message JsonReq {
+  string srcService = 1;
+  string msgId = 2;
+  string msgContent = 3;
+}
+
+message JsonRsp {
+  string msgId = 2;
+  string msgContent = 3;
+}
+
+message Rsp {
+  string msgId = 1;
+  repeated bytes msgContent = 2;
+}
+
+message StreamRsp {
+  string msgId = 1;
+  repeated bytes msgContent = 2;
+  string reqId = 3;
+  int64  spnid = 4;
+}

@@ -1,0 +1,175 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /demo2/hello:
+        post:
+            tags:
+                - Demo2
+            operationId: Demo2_Hello
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.helloworld.v1.HelloReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.helloworld.v1.HelloRep'
+    /demo2/{name}:
+        get:
+            tags:
+                - Demo2
+            description: Sends a greeting
+            operationId: Demo2_Hi
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.helloworld.v1.Demo2Reply'
+    /helloworld/{name}:
+        get:
+            tags:
+                - Greeter
+            description: Sends a greeting
+            operationId: Greeter_SayHello
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/helloworld.v1.HelloReply'
+    /rpc/JsonMessage:
+        post:
+            tags:
+                - RouterService
+            operationId: RouterService_JsonMessage
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/rpc.JsonReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/rpc.JsonRsp'
+    /rpc/RpcCall:
+        post:
+            tags:
+                - RouterService
+            operationId: RouterService_RpcCall
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/rpc.Req'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/rpc.Rsp'
+components:
+    schemas:
+        api.helloworld.v1.Demo2Reply:
+            type: object
+            properties:
+                message:
+                    type: string
+            description: The response message containing the greetings
+        api.helloworld.v1.HelloRep:
+            type: object
+            properties:
+                message:
+                    type: string
+                code:
+                    type: integer
+                    format: int32
+            description: The response message containing the greetings
+        api.helloworld.v1.HelloReq:
+            type: object
+            properties:
+                name:
+                    type: string
+                age:
+                    type: integer
+                    format: int32
+            description: The request message containing the user's name.
+        helloworld.v1.HelloReply:
+            type: object
+            properties:
+                message:
+                    type: string
+            description: The response message containing the greetings
+        rpc.JsonReq:
+            type: object
+            properties:
+                srcService:
+                    type: string
+                msgId:
+                    type: string
+                msgContent:
+                    type: string
+        rpc.JsonRsp:
+            type: object
+            properties:
+                msgId:
+                    type: string
+                msgContent:
+                    type: string
+        rpc.Req:
+            type: object
+            properties:
+                srcService:
+                    type: string
+                msgId:
+                    type: string
+                msgContent:
+                    type: array
+                    items:
+                        type: string
+                        format: bytes
+        rpc.Rsp:
+            type: object
+            properties:
+                msgId:
+                    type: string
+                msgContent:
+                    type: array
+                    items:
+                        type: string
+                        format: bytes
+tags:
+    - name: Demo2
+    - name: Greeter
+      description: The greeting service definition.
+    - name: RouterService
