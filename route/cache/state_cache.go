@@ -75,7 +75,7 @@ type ServiceStateCacheImpl struct {
 	allServices        map[string]map[string]map[int]*route.StatefulServiceState // namespace -> serviceName -> podId -> state
 
 	// 缓存统计
-	stats *CacheStats
+	stats *StateCacheStats
 
 	// 控制通道
 	stopCh chan struct{}
@@ -85,8 +85,8 @@ type ServiceStateCacheImpl struct {
 	initialized bool
 }
 
-// CacheStats 缓存统计信息
-type CacheStats struct {
+// StateCacheStats 状态缓存统计信息
+type StateCacheStats struct {
 	TotalEntries      int64         `json:"totalEntries"`
 	HitCount          int64         `json:"hitCount"`
 	MissCount         int64         `json:"missCount"`
@@ -109,7 +109,7 @@ func NewServiceStateCache(config *route.StatefulBaseConfig, logger log.Logger, r
 		routeInfoDriver:    routeInfoDriver,
 		routableStateCache: make(map[string]map[string][]*route.StatefulServiceState),
 		allServices:        make(map[string]map[string]map[int]*route.StatefulServiceState),
-		stats:              &CacheStats{},
+		stats:              &StateCacheStats{},
 		stopCh:             make(chan struct{}),
 	}
 }
@@ -436,9 +436,9 @@ func (c *ServiceStateCacheImpl) warmupCache() {
 }
 
 // GetStats 获取缓存统计信息
-func (c *ServiceStateCacheImpl) GetStats() *CacheStats {
+func (c *ServiceStateCacheImpl) GetStats() *StateCacheStats {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	defer c.mu.RLock()
 
 	stats := *c.stats
 	stats.TotalEntries = int64(len(c.allServices))

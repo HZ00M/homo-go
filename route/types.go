@@ -259,3 +259,48 @@ func NewRouteErrorWithDetails(code, message, details string) *RouteError {
 		Details: details,
 	}
 }
+
+// ==================== State模块类型定义 ====================
+
+// ServerInfo 服务器信息
+type ServerInfo struct {
+	Namespace   string // 命名空间
+	ServiceName string // 服务名称
+	PodIndex    int    // Pod索引
+}
+
+// BaseConfig 基础配置
+type BaseConfig struct {
+	// 服务状态更新周期（秒）
+	ServiceStateUpdatePeriodSeconds int
+	// CPU因子（用于计算加权状态）
+	CpuFactor float64
+	// 临时链接信息缓存时间（秒）
+	TempLinkInfoCacheTimeSeconds int
+	// 用户链接信息缓存时间（秒）
+	UserLinkInfoCacheTimeSeconds int
+}
+
+// StateObj 状态对象
+type StateObj struct {
+	State        int       // 状态值
+	UpdateTime   time.Time // 更新时间
+	RoutingState string    // 路由状态
+}
+
+// ToStateString 转换为状态字符串
+func (s *StateObj) ToStateString() string {
+	// 这里可以根据需要实现状态序列化逻辑
+	// 暂时返回简单的字符串表示
+	return "state"
+}
+
+// DefaultBaseConfig 默认基础配置
+func DefaultBaseConfig() *BaseConfig {
+	return &BaseConfig{
+		ServiceStateUpdatePeriodSeconds: 30,
+		CpuFactor:                       0.7,
+		TempLinkInfoCacheTimeSeconds:    300,
+		UserLinkInfoCacheTimeSeconds:    240, // 比临时缓存短60秒
+	}
+}

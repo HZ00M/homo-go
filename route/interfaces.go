@@ -117,3 +117,77 @@ type ModuleInitializer interface {
 	// 初始化模块
 	OnInitModule() error
 }
+
+// ==================== State模块接口定义 ====================
+
+// StatefulRouteForClientDriver 有状态客户端驱动接口
+type StatefulRouteForClientDriver interface {
+	// 计算一个最佳podId
+	ComputeLinkedPod(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 获取uid下的连接信息
+	GetLinkedPod(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 从缓存或注册中心获取连接信息
+	GetLinkedPodInCacheOrIfPersist(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 直接从注册中心获取连接信息
+	GetLinkedPodNotCache(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 获取缓存中的连接信息
+	GetLinkedInCache(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 标识连接信息过期
+	CacheExpired(ctx context.Context, namespace, uid, serviceName string) (int, error)
+
+	// 设置连接信息到缓存
+	SetCache(ctx context.Context, namespace, uid, serviceName string, podIndex int) (int, error)
+
+	// 获取用户连接的所有服务
+	GetLinkService(ctx context.Context, namespace, uid string) (map[string]int, error)
+
+	// 批量获取连接信息
+	BatchGetLinkedPod(ctx context.Context, namespace string, keys []string, serviceName string) (map[int][]string, error)
+
+	// 设置链接pod（如果不存在）
+	SetLinkedPodIfAbsent(ctx context.Context, namespace, uid, serviceName string, podIndex int) (int, error)
+
+	// 初始化
+	Init() error
+
+	// 关闭
+	Close() error
+}
+
+// StatefulRouteForServerDriver 有状态服务端驱动接口
+type StatefulRouteForServerDriver interface {
+	// 设置服务器负载状态
+	SetLoadState(ctx context.Context, loadState int) error
+
+	// 获取服务器负载状态
+	GetLoadState(ctx context.Context) (int, error)
+
+	// 设置路由状态
+	SetRoutingState(ctx context.Context, state RoutingState) error
+
+	// 获取路由状态
+	GetRoutingState(ctx context.Context) (RoutingState, error)
+
+	// 设置连接信息
+	SetLinkedPod(ctx context.Context, namespace, uid, serviceName string, podId int) (int, error)
+
+	// 尝试设置指定uid连接的podId
+	TrySetLinkedPod(ctx context.Context, namespace, uid, serviceName string, podId int) (bool, int, error)
+
+	// 移除服务连接信息
+	RemoveLinkedPod(ctx context.Context, namespace, uid, serviceName string) (bool, error)
+
+	// 移除指定uid连接的podId
+	RemoveLinkedPodWithId(ctx context.Context, namespace, uid, serviceName string, podId, persistSeconds int) (bool, error)
+
+	// 启动服务端驱动
+	Start(ctx context.Context) error
+
+	// 停止服务端驱动
+	Stop(ctx context.Context) error
+}

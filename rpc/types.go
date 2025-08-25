@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"context"
 	"reflect"
 )
 
@@ -17,14 +16,6 @@ type ParamInfo struct {
 	Name  string
 	Type  reflect.Type
 	Codec string
-}
-type RpcClientDriver interface {
-	Call(ctx context.Context, msgId string, data RpcContent) (RpcContent, error)
-}
-
-type RpcServerDriver interface {
-	OnCall(ctx context.Context, srcService string, msgId string, data RpcContent) (RpcContent, error)
-	Register(service any) error
 }
 
 // rpc方法信息
@@ -74,9 +65,4 @@ func (r *Content[T]) Type() RpcContentType {
 
 func (r *Content[T]) Data() any {
 	return r.Dt
-}
-
-type RpcContent interface {
-	Type() RpcContentType
-	Data() any
 }

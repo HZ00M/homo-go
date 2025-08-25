@@ -1,136 +1,143 @@
-# 有状态路由模块 - 任务文档关系说明
+# Route State 模块
 
-## 📋 文档概览
+## 概述
 
-本目录包含有状态路由模块的完整任务规划文档，基于 **6A 工作流程** 设计，确保任务目标明确、依赖清晰、实施有序。
+Route State 模块是 Homo-Go 项目中有状态服务路由系统的核心组件，实现**有状态路由的客户端和服务端驱动**。这些功能在Java版本中已经完整实现，包括Pod计算、链接管理、状态管理、跨命名空间通信等，需要转换为Go版本。
 
-## 🔗 文档关系图
+## 🎯 核心职责
 
-```mermaid
-graph TD
-    A[todolist.md] --> B[Task-01-定义核心接口和数据模型.md]
-    A --> C[Task-02-实现服务端驱动.md]
-    A --> D[Task-03-实现客户端驱动.md]
-    A --> E[Task-04-实现路由管理器.md]
-    A --> F[Task-05-编写单元测试.md]
-    A --> G[Task-06-性能优化和观测性增强.md]
-    
-    B --> C
-    B --> D
-    B --> E
-    C --> E
-    D --> E
-    E --> F
-    C --> F
-    D --> F
-    E --> G
-    F --> G
-    
-    style A fill:#e1f5fe
-    style B fill:#f3e5f5
-    style C fill:#fff3e0
-    style D fill:#fff3e0
-    style E fill:#e8f5e8
-    style F fill:#fff8e1
-    style G fill:#fce4ec
+### 1. 客户端驱动（StatefulRouteForClientDriver）
+- **Pod计算**: 计算最佳可用Pod，支持缓存和Redis查询
+- **链接管理**: 管理用户与Pod的链接关系
+- **缓存策略**: 本地缓存优化，支持过期和更新
+- **跨命名空间**: 支持gRPC跨命名空间通信
+
+### 2. 服务端驱动（StatefulRouteForServerDriver）
+- **状态管理**: 管理本地Pod的服务状态、负载状态、路由状态
+- **定时更新**: 定时更新服务状态和工作负载状态
+- **链接操作**: 支持Pod链接的设置、尝试设置、移除等操作
+- **配置验证**: 验证基础配置的有效性
+
+### 3. gRPC客户端（RouteGrpcClient）
+- **跨命名空间通信**: 支持跨Kubernetes命名空间的Pod链接操作
+- **连接管理**: 管理gRPC连接的生命周期
+- **健康检查**: 监控远程服务的健康状态
+
+## 🏗️ 架构设计
+
+### 模块关系
+```
+route/
+├── state/                    # 本模块：有状态路由驱动实现
+│   ├── client_driver.go        # 客户端驱动实现
+│   ├── server_driver.go        # 服务端驱动实现
+│   ├── state_manager.go        # 状态管理器
+│   └── grpc_client.go          # gRPC客户端
+├── driver/                  # 路由驱动（已完成）
+├── executor/                # Redis执行器（已完成）
+└── cache/                   # 缓存组件（已完成）
 ```
 
-## 📚 文档依赖关系
+### 核心接口
+- **StatefulRouteForClientDriver**: 客户端驱动主接口
+- **StatefulRouteForServerDriver**: 服务端驱动主接口
+- **RouteGrpcClient**: gRPC客户端接口
+- **StatefulObjCallback**: 异步操作回调接口
 
-### 第一层：基础定义
-- **`todolist.md`** - 总任务清单，定义整体架构和文件规划
-- **`Task-01-定义核心接口和数据模型.md`** - 定义所有核心接口和数据结构
+### 数据模型
+- **缓存管理**: 本地Pod索引缓存
+- **状态对象**: 服务状态、负载状态、路由状态
+- **链接信息**: 用户与Pod的链接关系
 
-### 第二层：核心实现
-- **`Task-02-实现服务端驱动.md`** - 依赖 Task-01 的接口定义
-- **`Task-03-实现客户端驱动.md`** - 依赖 Task-01 的接口定义
-- **`Task-04-实现路由管理器.md`** - 依赖 Task-01、Task-02、Task-03 的实现
+## 🔄 与现有模块的集成
 
-### 第三层：质量保障
-- **`Task-05-编写单元测试.md`** - 依赖所有核心实现完成
-- **`Task-06-性能优化和观测性增强.md`** - 依赖基础功能稳定运行
+### 依赖模块
+- **RouteInfoDriver** (driver模块): 用于路由决策和状态查询
+- **StatefulExecutor** (executor模块): 用于Redis操作和状态持久化
+- **ServiceStateCache** (cache模块): 用于状态缓存
 
-## 🎯 任务执行顺序
+### 新增模块
+- **StatefulRouteForClientDriver**: 客户端驱动接口和实现
+- **StatefulRouteForServerDriver**: 服务端驱动接口和实现
+- **RouteGrpcClient**: gRPC客户端实现
 
-```mermaid
-gantt
-    title 有状态路由模块任务执行计划
-    dateFormat  YYYY-MM-DD
-    section 基础层
-    Task-01 接口定义           :done, task01, 2025-01-01, 2d
-    section 实现层
-    Task-02 服务端驱动         :active, task02, after task01, 3d
-    Task-03 客户端驱动         :active, task03, after task01, 3d
-    Task-04 路由管理器         :task04, after task02, 4d
-    section 质量层
-    Task-05 单元测试           :task05, after task04, 3d
-    Task-06 性能优化           :task06, after task05, 2d
+## 📋 开发任务
+
+| 任务 | 状态 | 描述 |
+|------|------|------|
+| Task-01 | ❌ 未开始 | 定义客户端和服务端驱动接口 |
+| Task-02 | ❌ 未开始 | 实现客户端驱动（StatefulRouteForClientDriverImpl） |
+| Task-03 | ❌ 未开始 | 实现服务端驱动（StatefulRouteForServerDriverImpl） |
+| Task-04 | ❌ 未开始 | 实现gRPC客户端（跨命名空间通信） |
+| Task-05 | ❌ 未开始 | 编写单元测试 |
+| Task-06 | ❌ 未开始 | 性能优化和观测性增强 |
+
+## 🚀 使用场景
+
+### 1. 客户端Pod计算
+```go
+// 计算最佳可用Pod
+podIndex, err := clientDriver.ComputeLinkedPod(ctx, "default", "user123", "user-service")
 ```
 
-## 🔄 任务状态流转
+### 2. 服务端状态管理
+```go
+// 设置本地Pod负载状态
+err := serverDriver.SetLoadState(ctx, 2) // 低负载状态
 
-```mermaid
-stateDiagram-v2
-    [*] --> 未开始
-    未开始 --> 进行中: 开始实施
-    进行中 --> 已完成: 任务完成
-    进行中 --> 阻塞: 依赖未满足
-    阻塞 --> 进行中: 依赖解决
-    已完成 --> 迭代优化: 后续优化
+// 设置路由状态
+err := serverDriver.SetRoutingState(ctx, route.RoutingStateReady)
 ```
 
-## 📁 文件结构对应关系
+### 3. 跨命名空间通信
+```go
+// 通过gRPC设置跨命名空间的Pod链接
+podIndex, err := grpcClient.SetLinkedPodIfAbsent(ctx, "prod", "user123", "user-service", 1)
+```
 
-| 任务文档 | 对应实现文件 | 包名 | 职责 |
-|---------|-------------|------|------|
-| Task-01 | `route/interfaces.go`<br>`route/types.go` | `package route` | 接口定义、数据模型 |
-| Task-02 | `route/driver/server_driver.go` | `package driver` | 服务端驱动实现 |
-| Task-03 | `route/driver/client_driver.go` | `package driver` | 客户端驱动实现 |
-| Task-04 | `route/state/route_manager.go`<br>`route/state/load_balancer.go`<br>`route/state/health_checker.go`<br>`route/state/failover_handler.go` | `package state` | 核心路由管理 |
-| Task-05 | `route/test/*_test.go` | `package test` | 单元测试覆盖 |
-| Task-06 | `route/state/metrics/`<br>`route/state/tracing/`<br>`route/state/cache/` | `package metrics`<br>`package tracing`<br>`package cache` | 性能优化、观测性 |
+## 🛠️ 技术特性
 
-## 🔍 关键依赖点
+- **Go 1.21+**: 使用最新的Go语言特性
+- **Kratos v2**: 基于Kratos框架构建
+- **本地缓存**: 客户端本地缓存优化性能
+- **gRPC通信**: 支持跨命名空间通信
+- **异步操作**: 基于回调的异步操作模式
+- **定时任务**: 服务端定时状态更新
 
-### 接口依赖
-- **Task-02 & Task-03** 必须实现 **Task-01** 定义的接口
-- **Task-04** 需要组合 **Task-02 & Task-03** 的实现
-- **Task-05** 需要所有核心模块实现完成
+## 📚 设计原则
 
-### 数据依赖
-- **ServiceState** 和 **RoutingState** 在所有任务中共享
-- **Redis** 连接池配置在 **Task-02** 中定义，其他任务复用
-- **错误类型** 在 **Task-01** 中统一定义
+1. **功能对等**: 与Java版本功能完全一致
+2. **接口分离**: 客户端和服务端功能分离
+3. **依赖注入**: 支持Kratos的依赖注入系统
+4. **缓存优化**: 本地缓存减少网络开销
+5. **异步支持**: 支持异步操作和回调机制
 
-### 配置依赖
-- **Redis** 配置信息在 **Task-02** 中管理
-- **负载均衡策略** 在 **Task-04** 中配置
-- **健康检查参数** 在 **Task-04** 中设置
+## 🔍 关键特性
 
-## 📊 进度跟踪
+### 缓存策略
+- **客户端缓存**: 本地Pod索引缓存，减少Redis查询
+- **缓存过期**: 支持缓存过期和自动更新
+- **失效处理**: 智能处理缓存失效情况
 
-- **总体进度**: 13.3% (1/6 任务完成)
-- **核心接口**: 80% 完成
-- **驱动实现**: 0% 完成
-- **路由管理**: 0% 完成
-- **测试覆盖**: 0% 完成
-- **性能优化**: 0% 完成
+### 状态管理
+- **定时更新**: 服务端定时更新服务状态和工作负载状态
+- **状态一致性**: 确保状态的一致性和有效性
+- **配置验证**: 验证基础配置的有效性
 
-## 🚀 下一步行动
+### 跨命名空间
+- **gRPC通信**: 支持跨Kubernetes命名空间的Pod链接操作
+- **连接管理**: 管理gRPC连接的生命周期
+- **健康检查**: 监控远程服务的健康状态
 
-1. **立即执行**: Task-02 和 Task-03 可以并行开发
-2. **等待依赖**: Task-04 需要等待 Task-02 和 Task-03 完成
-3. **质量保障**: Task-05 在所有核心功能完成后开始
-4. **性能优化**: Task-06 在系统稳定运行后进行
+## 🔍 监控和观测
 
-## 📝 注意事项
-
-- 每个任务完成后，需要更新 `todolist.md` 中的状态
-- 接口变更需要同步更新所有依赖的任务文档
-- 新增依赖需要评估对现有任务的影响
-- 性能优化建议在基础功能稳定后进行
+- **性能指标**: Pod计算和链接操作的性能指标
+- **缓存命中率**: 本地缓存的命中率统计
+- **跨命名空间通信**: gRPC通信的性能和错误统计
+- **状态更新**: 服务端状态更新的频率和成功率
 
 ---
 
-*最后更新: 2025-01-01*
-*维护者: 待分配*
+**版本**: v1.0.0  
+**最后更新**: 2025-01-27  
+**维护者**: AI助手
