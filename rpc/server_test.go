@@ -109,8 +109,8 @@ func TestRpcServer(t *testing.T) {
 			t.Errorf("Failed to marshal param0: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes},
 		}
 
 		// 调用RPC服务器
@@ -158,8 +158,8 @@ func TestRpcServer(t *testing.T) {
 			t.Errorf("Failed to marshal param1: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes, param1Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes, param1Bytes},
 		}
 
 		// 调用RPC服务器
@@ -243,8 +243,8 @@ func TestRpcServer(t *testing.T) {
 			t.Errorf("Failed to marshal param0: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes},
 		}
 
 		// 调用RPC服务器
@@ -292,8 +292,8 @@ func TestContentInfo(t *testing.T) {
 	// 测试JSON内容
 	t.Run("TestJsonContent", func(t *testing.T) {
 		content := &Content[string]{
-			CType:   RpcContentJson,
-			Content: `{"key": "value"}`,
+			CType: RpcContentJson,
+			Dt:    `{"key": "value"}`,
 		}
 
 		if content.Type() != RpcContentJson {
@@ -314,8 +314,8 @@ func TestContentInfo(t *testing.T) {
 		}
 
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: bytesData,
+			CType: RpcContentBytes,
+			Dt:    bytesData,
 		}
 
 		if content.Type() != RpcContentBytes {
@@ -358,8 +358,8 @@ func TestPackerSelection(t *testing.T) {
 			t.Errorf("Failed to marshal param1: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes, param1Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes, param1Bytes},
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "BasicMethod", content)
@@ -396,8 +396,8 @@ func TestPackerSelection(t *testing.T) {
 			t.Fatalf("Failed to marshal msgpack data: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes},
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "ProcessMessagePack", content)
@@ -451,8 +451,8 @@ func TestPackerSelection(t *testing.T) {
 			"age": 25
 		}`
 		content := &Content[string]{
-			CType:   RpcContentJson,
-			Content: jsonData,
+			CType: RpcContentJson,
+			Dt:    jsonData,
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "JsonMethod", content)
@@ -503,8 +503,8 @@ func TestPackerComparison(t *testing.T) {
 		}
 
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{bytesData},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{bytesData},
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "ProtoMethod", content)
@@ -562,8 +562,8 @@ func TestPackerComparison(t *testing.T) {
 			"age": 30
 		}`
 		content := &Content[string]{
-			CType:   RpcContentJson,
-			Content: jsonData,
+			CType: RpcContentJson,
+			Dt:    jsonData,
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "JsonMethodNoError", content)
@@ -609,8 +609,8 @@ func TestPackerComparison(t *testing.T) {
 			t.Fatalf("Failed to marshal msgpack data: %v", err)
 		}
 		content := &Content[[][]byte]{
-			CType:   RpcContentBytes,
-			Content: [][]byte{param0Bytes},
+			CType: RpcContentBytes,
+			Dt:    [][]byte{param0Bytes},
 		}
 
 		result, err := rpcServer.OnCall(ctx, "client", "ProcessMessagePack", content)

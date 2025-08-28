@@ -1,680 +1,567 @@
 ---
-description: 
-globs: 
-alwaysApply: false
+alwaysApply: true
 ---
-# Kratos 代码风格规范
 
-## 概述
+🏗 Homo-Go 框架开发最佳实践指南（Kratos 集成版）
+1. 项目整体架构
+1.1 核心原则
 
-本文档定义了基于 Kratos 微服务框架的代码风格规范。所有代码必须遵循这些规范，确保代码的一致性、可维护性和可读性。
+优先复用 Kratos 提供的能力（log、config、transport、registry、app lifecycle）
 
-## 目录结构规范
+Module 只关注领域逻辑，不要重复造 config/log 管理器
 
-### 标准项目结构
+目录结构清晰分层：
 
-```
-project/
-├── api/                    # API 定义
-│   ├── proto/             # Protocol Buffers 定义
-│   └── swagger/           # Swagger 文档
-├── cmd/                   # 应用程序入口
-│   └── server/           # 服务器入口
-├── configs/               # 配置文件
-├── internal/              # 内部包
-│   ├── biz/              # 业务逻辑层
-│   ├── conf/             # 配置结构定义
-│   ├── data/             # 数据访问层
-│   ├── server/           # 服务器实现
-│   └── service/          # 服务层
-├── pkg/                   # 可导出的包
-├── third_party/          # 第三方依赖
-├── web/                  # Web 资源
-├── Makefile              # 构建脚本
-├── go.mod                # Go 模块文件
-└── go.sum                # Go 依赖校验文件
-```
+configs/：由 Kratos config 管理（文件/etcd/nacos 等）
 
-## 命名规范
+log/：封装 Kratos log.Logger
 
-### 包命名
-- 使用小写字母，避免下划线或驼峰命名
-- 包名应该简洁、清晰，反映包的功能
-- 避免使用复数形式
+module/：只写业务模块（ModuleKit）
 
-```go
-// ✅ 正确
-package transport
-package middleware
-package registry
+cmd/：入口，直接用 kratos.New() + wire.Build()
 
-// ❌ 错误
-package Transport
-package transport_http
-package transports
-```
+1.2 目录结构规范
+homo-go/                    # 项目根目录
+├── api/                    # 公共 API / Proto 定义
+│   ├── entity/             
+│   ├── metadata/           
+│   └── rpc/                
+├── cmd/                    # 可执行程序入口
+│   ├── kratos/            
+│   ├── protoc-gen-go-errors/
+│   └── protoc-gen-go-http/  
+├── configs/                # 配置文件
+├── contrib/                # 第三方贡献模块
+├── encoding/               
+├── entity/                 
+├── internal/               # 内部实现（不对外暴露）
+├── log/                    # 日志封装
+├── middleware/             # 中间件
+├── module/                 # 业务模块管理（ModuleKit）
+├── registry/               # 服务注册
+├── route/                  # 路由模块
+├── rpc/                    # RPC 层
+├── selector/               
+├── storage/                
+├── transport/              # 传输层
+└── go.mod                  
 
-### 文件命名
-- 使用小写字母和下划线
-- 文件名应该反映其内容
+1.3 模块目录结构
+module_name/                 
+├── todo/                   # 6A 工作流任务文档
+│   ├── todolist.md        
+│   └── Task-XX-xxx.md     
+├── interfaces.go           # 模块接口定义
+├── types.go                # 类型/常量/错误码
+├── wire.go                 # Wire 依赖注入（如需要）
+├── registry.go             # 全局模块注册表（如需要）
+├── manager.go              # 管理器实现（如需要）
+├── module_name.go          # 核心业务逻辑 
+├── module_name_test.go     # 测试文件
+├── module_name_mock.go     # Mock 对象 
+└── README.md               # 使用说明
 
-```go
-// ✅ 正确
-http_server.go
-grpc_server.go
-middleware.go
 
-// ❌ 错误
-HttpServer.go
-grpcServer.go
-Middleware.go
-```
+文件规范：
 
-### 结构体命名
-- 使用 PascalCase
-- 结构体名应该清晰表达其用途
+interfaces.go → 所有公共接口
 
-```go
-// ✅ 正确
-type Server struct {
-    addr string
-    port int
+types.go → 类型、常量、错误定义
+
+manager.go → 模块管理器（可选）
+
+module_name.go → 核心逻辑
+
+2. Kratos 生命周期与 Module 生命周期对齐
+
+Kratos 提供了生命周期 Hook：
+
+app.BeforeStart(func(ctx context.Context) error { ... })
+app.AfterStart(func(ctx context.Context) error { ... })
+app.BeforeStop(func(ctx context.Context) error { ... })
+app.AfterStop(func(ctx context.Context) error { ... })
+
+
+推荐的对齐方式：
+
+Homo-Go Module	Kratos 生命周期	用途
+Init	NewApp() 阶段	初始化模块（配置加载、依赖注入）
+AfterAllInit	BeforeStart()	所有模块 Init 完成后再做依赖绑定
+AfterStart	AfterStart()	注册到大厅、开启定时任务、准备对外服务
+BeforeClose	BeforeStop()	刷数据、停止任务
+AfterStop	AfterStop()	清理缓存、下线标记
+3. 模块开发规范
+3.1 模块接口
+// interfaces.go
+type Module interface {
+    Name() string
+    Init(ctx context.Context, logger log.Logger, cfg config.Config) error
+    AfterAllInit(ctx context.Context)
+    AfterStart(ctx context.Context)
+    BeforeClose(ctx context.Context)
+    AfterStop(ctx context.Context)
 }
 
-type Client struct {
-    endpoint string
-    timeout  time.Duration
+3.2 ModuleManager
+type ModuleManager struct {
+    modules []Module
+    logger  *log.Helper
+    cfg     config.Config
 }
 
-// ❌ 错误
-type server struct {
-    addr string
-    port int
-}
-```
-
-### 接口命名
-- 使用 PascalCase
-- 接口名通常以 "er" 结尾，表示行为
-
-```go
-// ✅ 正确
-type Registry interface {
-    Register(ctx context.Context, service *ServiceInfo) error
-    Deregister(ctx context.Context, service *ServiceInfo) error
+func NewModuleManager(logger log.Logger, cfg config.Config, mods []Module) *ModuleManager {
+    return &ModuleManager{
+        modules: mods,
+        logger:  log.NewHelper(logger),
+        cfg:     cfg,
+    }
 }
 
-type Selector interface {
-    Select(ctx context.Context, opts ...SelectOption) (Selected, error)
+func (m *ModuleManager) RegisterToApp(app *kratos.App) {
+    ctx := context.Background()
+    for _, mod := range m.modules {
+        if err := mod.Init(ctx, m.logger, m.cfg); err != nil {
+            panic(err)
+        }
+    }
+
+    app.BeforeStart(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterAllInit(ctx)
+        }
+        return nil
+    })
+
+    app.AfterStart(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterStart(ctx)
+        }
+        return nil
+    })
+
+    app.BeforeStop(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.BeforeClose(ctx)
+        }
+        return nil
+    })
+
+    app.AfterStop(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterStop(ctx)
+        }
+        return nil
+    })
 }
 
-// ❌ 错误
-type registry interface {
-    register(ctx context.Context, service *ServiceInfo) error
+4. 配置管理（复用 Kratos config）
+
+使用 atomic.Value 保证热更新一致性：
+
+type MyModule struct {
+    cfg atomic.Value // *MyConfig
 }
-```
 
-### 方法命名
-- 使用 PascalCase
-- 方法名应该清晰表达其功能
+func (m *MyModule) Init(ctx context.Context, logger log.Logger, cfg config.Config) error {
+    var c MyConfig
+    if err := cfg.Scan(&c); err != nil {
+        return err
+    }
+    m.cfg.Store(&c)
 
-```go
-// ✅ 正确
-func (s *Server) Start() error
-func (c *Client) Connect() error
-func (r *Registry) Register(ctx context.Context, service *ServiceInfo) error
+    cfg.Watch("my_module", func(key string, value config.Value) {
+        var nc MyConfig
+        if err := value.Scan(&nc); err == nil {
+            m.cfg.Store(&nc)
+        }
+    })
+    return nil
+}
 
-// ❌ 错误
-func (s *Server) start() error
-func (c *Client) connect() error
-```
+func (m *MyModule) doSomething() {
+    cfg := m.cfg.Load().(*MyConfig)
+    if cfg.Enable {
+        ...
+    }
+}
 
-### 变量命名
-- 使用 camelCase
-- 变量名应该有意义，避免使用单字母
+5. 日志（复用 Kratos log）
 
-```go
-// ✅ 正确
-var serverAddr string
-var clientTimeout time.Duration
-var registryEndpoint string
+统一打 module 标签：
 
-// ❌ 错误
-var sa string
-var ct time.Duration
-var re string
-```
+type MyModule struct {
+    log *log.Helper
+}
 
-### 常量命名
-- 使用 PascalCase
-- 常量名应该清晰表达其含义
+func NewMyModule(logger log.Logger) *MyModule {
+    return &MyModule{
+        log: log.NewHelper(log.With(logger, "module", "my_module")),
+    }
+}
 
-```go
-// ✅ 正确
+6. 错误码
+
+模块错误码规则：<模块名>_<错误描述>，定义放在 types.go：
+
 const (
-    DefaultTimeout = 30 * time.Second
-    MaxRetries     = 3
-    DefaultPort    = 8080
+    ErrInvalidConfig = "USER_INVALID_CONFIG"
+    ErrLoginFailed   = "USER_LOGIN_FAILED"
 )
 
-// ❌ 错误
-const (
-    defaultTimeout = 30 * time.Second
-    max_retries   = 3
-)
-```
-
-## 代码组织规范
-
-### 文件结构
-每个 Go 文件应该按照以下顺序组织：
-
-```go
-// 1. 包声明
-package transport
-
-// 2. 导入语句
-import (
-    "context"
-    "fmt"
-    "time"
-    
-    "github.com/go-kratos/kratos/v2/log"
-    "github.com/go-kratos/kratos/v2/errors"
-)
-
-// 3. 常量定义
-const (
-    DefaultTimeout = 30 * time.Second
-    MaxRetries     = 3
-)
-
-// 4. 变量定义
 var (
-    logger = log.NewHelper(log.With(log.GetLogger(), "module", "transport"))
+    ErrConfig = errors.New(400, ErrInvalidConfig, "invalid config")
+    ErrLogin  = errors.New(401, ErrLoginFailed, "login failed")
 )
 
-// 5. 类型定义
-type Server struct {
-    addr string
-    port int
-}
+7. 依赖注入（Wire）
 
-// 6. 接口定义
-type Registry interface {
-    Register(ctx context.Context, service *ServiceInfo) error
-}
+用 wire.Slice 自动收集所有 Module：
 
-// 7. 结构体方法
-func (s *Server) Start() error {
-    // 实现逻辑
-}
+var ModuleSet = wire.NewSet(
+    NewUserModule,
+    NewMatchModule,
+    NewChatModule,
+    wire.Slice(
+        new(Module),
+        NewUserModule,
+        NewMatchModule,
+        NewChatModule,
+    ),
+)
 
-// 8. 函数定义
-func NewServer(addr string, port int) *Server {
-    return &Server{
-        addr: addr,
-        port: port,
-    }
-}
-```
+8. 游戏服务常见模块
 
-### 导入规范
-- 标准库优先
-- 第三方库其次
-- 项目内部包最后
-- 使用 goimports 工具自动格式化
+UserModule：用户登录、会话管理
 
-```go
+MatchModule：匹配系统
+
+RoomModule：战斗房间管理
+
+ChatModule：聊天频道
+
+MailModule：离线邮件
+
+所有模块都只实现 Module 接口，统一交给 ModuleManager 管理。
+
+9. 最小可运行 Demo
+// cmd/main.go
+package main
+
 import (
-    // 标准库
     "context"
-    "fmt"
-    "time"
-    
-    // 第三方库
-    "github.com/go-kratos/kratos/v2/log"
-    "github.com/go-kratos/kratos/v2/errors"
-    "google.golang.org/protobuf/proto"
-    
-    // 项目内部包
-    "github.com/go-kratos/kratos/v2/internal/endpoint"
-    "github.com/go-kratos/kratos/v2/internal/host"
-)
-```
-
-## 错误处理规范
-
-### 错误定义
-使用 Kratos 的错误处理机制：
-
-```go
-// 定义错误码
-const (
-    ErrServiceNotFound = "SERVICE_NOT_FOUND"
-    ErrInvalidEndpoint = "INVALID_ENDPOINT"
-    ErrTimeout         = "TIMEOUT"
-)
-
-// 创建错误
-func NewServiceNotFoundError(serviceName string) error {
-    return errors.New(404, ErrServiceNotFound, fmt.Sprintf("service %s not found", serviceName))
-}
-
-func NewInvalidEndpointError(endpoint string) error {
-    return errors.New(400, ErrInvalidEndpoint, fmt.Sprintf("invalid endpoint: %s", endpoint))
-}
-```
-
-### 错误处理
-- 总是检查错误
-- 使用有意义的错误信息
-- 避免忽略错误
-
-```go
-// ✅ 正确
-func (r *Registry) GetService(ctx context.Context, name string) (*ServiceInfo, error) {
-    service, exists := r.services[name]
-    if !exists {
-        return nil, NewServiceNotFoundError(name)
-    }
-    return service, nil
-}
-
-// ❌ 错误
-func (r *Registry) GetService(ctx context.Context, name string) (*ServiceInfo, error) {
-    service, _ := r.services[name] // 忽略错误
-    return service, nil
-}
-```
-
-## 日志规范
-使用 Kratos 的日志系统打印,自动注入：
-### 日志级别使用
-- `log.Debugf`: 调试信息，开发时使用
-- `log.Infof`: 一般信息，正常运行时的状态
-- `log.Warnf`: 警告信息，可能的问题
-- `log.Errorf`: 错误信息，需要关注的问题
-
-
-### 结构化日志
-使用结构化日志字段：
-
-```go
-logger.WithContext(ctx).Infow("Service registered",
-    "service_name", service.Name,
-    "endpoint", service.Endpoint,
-    "timestamp", time.Now(),
-)
-```
-
-## 依赖注入规范
-
-### Wire 依赖注入
-使用 Kratos 的 Wire 进行依赖注入：
-
-```go
-// internal/wire.go
-//go:build wireinject
-// +build wireinject
-
-package internal
-
-import (
     "github.com/go-kratos/kratos/v2"
+    "github.com/go-kratos/kratos/v2/config"
     "github.com/go-kratos/kratos/v2/log"
-    "github.com/google/wire"
-    "github.com/go-kratos/kratos/internal/biz"
-    "github.com/go-kratos/kratos/internal/conf"
-    "github.com/go-kratos/kratos/internal/data"
-    "github.com/go-kratos/kratos/internal/server"
-    "github.com/go-kratos/kratos/internal/service"
 )
 
-// wireApp init kratos application.
-func wireApp(*conf.Bootstrap, log.Logger) (*kratos.App, func(), error) {
-    panic(wire.Build(server.ProviderSet, data.ProviderSet, biz.ProviderSet, service.ProviderSet, newApp))
-}
-```
-
-### Provider Set 定义
-```go
-// internal/biz/provider.go
-var ProviderSet = wire.NewSet(NewUsecase)
-
-// internal/data/provider.go
-var ProviderSet = wire.NewSet(NewData, NewRepo)
-
-// internal/service/provider.go
-var ProviderSet = wire.NewSet(NewService)
-```
-
-## 测试规范
-
-### 测试文件命名
-- 测试文件以 `_test.go` 结尾
-- 测试文件与被测试文件在同一目录
-
-```go
-// server.go
-package server
-
-type Server struct {
-    addr string
-    port int
+type HelloModule struct {
+    log *log.Helper
 }
 
-// server_test.go
-package server
+func NewHelloModule(logger log.Logger) *HelloModule {
+    return &HelloModule{log: log.NewHelper(log.With(logger, "module", "hello"))}
+}
+
+func (h *HelloModule) Name() string { return "hello" }
+func (h *HelloModule) Init(ctx context.Context, logger log.Logger, cfg config.Config) error {
+    h.log.Info("Init")
+    return nil
+}
+func (h *HelloModule) AfterAllInit(ctx context.Context) { h.log.Info("AfterAllInit") }
+func (h *HelloModule) AfterStart(ctx context.Context)   { h.log.Info("AfterStart") }
+func (h *HelloModule) BeforeClose(ctx context.Context)  { h.log.Info("BeforeClose") }
+func (h *HelloModule) AfterStop(ctx context.Context)    { h.log.Info("AfterStop") }
+
+func main() {
+    logger := log.With(log.NewStdLogger(os.Stdout), "ts", log.DefaultTimestamp)
+    cfg := config.New(config.WithSource()) // 简化
+    mods := []Module{NewHelloModule(logger)}
+
+    mm := NewModuleManager(logger, cfg, mods)
+    app := kratos.New()
+    mm.RegisterToApp(app)
+    if err := app.Run(); err != nil {
+        panic(err)
+    }
+}🏗 Homo-Go 框架开发最佳实践指南（Kratos 集成版）
+1. 项目整体架构
+1.1 核心原则
+
+优先复用 Kratos 提供的能力（log、config、transport、registry、app lifecycle）
+
+Module 只关注领域逻辑，不要重复造 config/log 管理器
+
+目录结构清晰分层：
+
+configs/：由 Kratos config 管理（文件/etcd/nacos 等）
+
+log/：封装 Kratos log.Logger
+
+module/：只写业务模块（ModuleKit）
+
+cmd/：入口，直接用 kratos.New() + wire.Build()
+
+1.2 目录结构规范
+homo-go/                    # 项目根目录
+├── api/                    # 公共 API / Proto 定义
+│   ├── entity/             
+│   ├── metadata/           
+│   └── rpc/                
+├── cmd/                    # 可执行程序入口
+│   ├── kratos/            
+│   ├── protoc-gen-go-errors/
+│   └── protoc-gen-go-http/  
+├── configs/                # 配置文件
+├── contrib/                # 第三方贡献模块
+├── encoding/               
+├── entity/                 
+├── internal/               # 内部实现（不对外暴露）
+├── log/                    # 日志封装
+├── middleware/             # 中间件
+├── module/                 # 业务模块管理（ModuleKit）
+├── registry/               # 服务注册
+├── route/                  # 路由模块
+├── rpc/                    # RPC 层
+├── selector/               
+├── storage/                
+├── transport/              # 传输层
+└── go.mod                  
+
+1.3 模块目录结构
+module_name/                 
+├── todo/                   # 6A 工作流任务文档
+│   ├── todolist.md        
+│   └── Task-XX-xxx.md     
+├── interfaces.go           # 模块接口定义
+├── types.go                # 类型/常量/错误码
+├── wire.go                 # Wire 依赖注入
+├── manager.go              # 管理器实现（如需要）
+├── module_name.go          # 核心业务逻辑
+├── config.go               # 配置管理 
+├── module_name_test.go     # 测试文件
+├── module_name_mock.go     # Mock 对象 
+└── README.md               # 使用说明
+
+
+文件规范：
+
+interfaces.go → 所有公共接口
+
+types.go → 类型、常量、错误定义
+
+manager.go → 模块管理器（可选）
+
+module_name.go → 核心逻辑
+
+2. Kratos 生命周期与 Module 生命周期对齐
+
+Kratos 提供了生命周期 Hook：
+
+app.BeforeStart(func(ctx context.Context) error { ... })
+app.AfterStart(func(ctx context.Context) error { ... })
+app.BeforeStop(func(ctx context.Context) error { ... })
+app.AfterStop(func(ctx context.Context) error { ... })
+
+
+推荐的对齐方式：
+
+Homo-Go Module	Kratos 生命周期	用途
+Init	NewApp() 阶段	初始化模块（配置加载、依赖注入）
+AfterAllInit	BeforeStart()	所有模块 Init 完成后再做依赖绑定
+AfterStart	AfterStart()	注册到大厅、开启定时任务、准备对外服务
+BeforeClose	BeforeStop()	刷数据、停止任务
+AfterStop	AfterStop()	清理缓存、下线标记
+3. 模块开发规范
+3.1 模块接口
+// interfaces.go
+type Module interface {
+    Name() string
+    Init(ctx context.Context, logger log.Logger, cfg config.Config) error
+    AfterAllInit(ctx context.Context)
+    AfterStart(ctx context.Context)
+    BeforeClose(ctx context.Context)
+    AfterStop(ctx context.Context)
+}
+
+3.2 ModuleManager
+type ModuleManager struct {
+    modules []Module
+    logger  *log.Helper
+    cfg     config.Config
+}
+
+func NewModuleManager(logger log.Logger, cfg config.Config, mods []Module) *ModuleManager {
+    return &ModuleManager{
+        modules: mods,
+        logger:  log.NewHelper(logger),
+        cfg:     cfg,
+    }
+}
+
+func (m *ModuleManager) RegisterToApp(app *kratos.App) {
+    ctx := context.Background()
+    for _, mod := range m.modules {
+        if err := mod.Init(ctx, m.logger, m.cfg); err != nil {
+            panic(err)
+        }
+    }
+
+    app.BeforeStart(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterAllInit(ctx)
+        }
+        return nil
+    })
+
+    app.AfterStart(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterStart(ctx)
+        }
+        return nil
+    })
+
+    app.BeforeStop(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.BeforeClose(ctx)
+        }
+        return nil
+    })
+
+    app.AfterStop(func(ctx context.Context) error {
+        for _, mod := range m.modules {
+            mod.AfterStop(ctx)
+        }
+        return nil
+    })
+}
+
+4. 配置管理（复用 Kratos config）
+
+使用 atomic.Value 保证热更新一致性：
+
+type MyModule struct {
+    cfg atomic.Value // *MyConfig
+}
+
+func (m *MyModule) Init(ctx context.Context, logger log.Logger, cfg config.Config) error {
+    var c MyConfig
+    if err := cfg.Scan(&c); err != nil {
+        return err
+    }
+    m.cfg.Store(&c)
+
+    cfg.Watch("my_module", func(key string, value config.Value) {
+        var nc MyConfig
+        if err := value.Scan(&nc); err == nil {
+            m.cfg.Store(&nc)
+        }
+    })
+    return nil
+}
+
+func (m *MyModule) doSomething() {
+    cfg := m.cfg.Load().(*MyConfig)
+    if cfg.Enable {
+        ...
+    }
+}
+
+5. 日志（复用 Kratos log）
+
+统一打 module 标签：
+
+type MyModule struct {
+    log *log.Helper
+}
+
+func NewMyModule(logger log.Logger) *MyModule {
+    return &MyModule{
+        log: log.NewHelper(log.With(logger, "module", "my_module")),
+    }
+}
+
+6. 错误码
+
+模块错误码规则：<模块名>_<错误描述>，定义放在 types.go：
+
+const (
+    ErrInvalidConfig = "USER_INVALID_CONFIG"
+    ErrLoginFailed   = "USER_LOGIN_FAILED"
+)
+
+var (
+    ErrConfig = errors.New(400, ErrInvalidConfig, "invalid config")
+    ErrLogin  = errors.New(401, ErrLoginFailed, "login failed")
+)
+
+7. 依赖注入（Wire）
+
+用 wire.Slice 自动收集所有 Module：
+
+var ModuleSet = wire.NewSet(
+    NewUserModule,
+    NewMatchModule,
+    NewChatModule,
+    wire.Slice(
+        new(Module),
+        NewUserModule,
+        NewMatchModule,
+        NewChatModule,
+    ),
+)
+
+8. 游戏服务常见模块
+
+UserModule：用户登录、会话管理
+
+MatchModule：匹配系统
+
+RoomModule：战斗房间管理
+
+ChatModule：聊天频道
+
+MailModule：离线邮件
+
+所有模块都只实现 Module 接口，统一交给 ModuleManager 管理。
+
+9. 最小可运行 Demo
+// cmd/main.go
+package main
 
 import (
-    "testing"
-    "time"
+    "context"
+    "github.com/go-kratos/kratos/v2"
+    "github.com/go-kratos/kratos/v2/config"
+    "github.com/go-kratos/kratos/v2/log"
 )
 
-func TestNewServer(t *testing.T) {
-    // 测试逻辑
-}
-```
-
-### 测试函数命名
-- 测试函数以 `Test` 开头
-- 使用描述性的名称
-
-```go
-func TestServer_Start(t *testing.T) {
-    // 测试逻辑
+type HelloModule struct {
+    log *log.Helper
 }
 
-func TestRegistry_Register(t *testing.T) {
-    // 测试逻辑
-}
-```
-
-### 测试用例组织
-使用 `t.Run` 组织子测试：
-
-```go
-func TestRegistry_Register(t *testing.T) {
-    registry := NewRegistry()
-    
-    t.Run("successful registration", func(t *testing.T) {
-        service := &ServiceInfo{Name: "test", Endpoint: "localhost:8080"}
-        err := registry.Register(context.Background(), service)
-        if err != nil {
-            t.Errorf("expected no error, got %v", err)
-        }
-    })
-    
-    t.Run("empty service name", func(t *testing.T) {
-        service := &ServiceInfo{Name: "", Endpoint: "localhost:8080"}
-        err := registry.Register(context.Background(), service)
-        if err == nil {
-            t.Error("expected error for empty service name")
-        }
-    })
-}
-```
-
-## 文档规范
-中文解释细节，英文保留关键术语
-### 包文档
-每个包都应该有包级别的文档：
-```go
-// Package transport provides transport layer functionality for Kratos.
-//
-// This package includes:
-//   - HTTP server and client
-//   - gRPC server and client
-//   - Transport middleware
-package transport
-```
-
-### 函数文档
-公共函数应该有文档注释：
-```go
-// NewServer creates a new HTTP server with the given configuration.
-//
-// The function validates the input and creates a server instance.
-// If the configuration is invalid, an error is returned.
-//
-// Example:
-//
-//	server, err := NewServer(&Config{Addr: "localhost:8080"})
-//	if err != nil {
-//	    log.Error(err)
-//	}
-func NewServer(config *Config) (*Server, error) {
-    // 实现逻辑
-}
-```
-
-### 接口文档
-接口应该有清晰的文档：
-```go
-// Registry defines the interface for service registration operations.
-//
-// Implementations of this interface should be thread-safe and handle
-// concurrent access to service data.
-type Registry interface {
-    // Register registers a service with the registry.
-    // Returns an error if registration fails.
-    Register(ctx context.Context, service *ServiceInfo) error
-    
-    // Deregister removes a service from the registry.
-    // Returns an error if deregistration fails.
-    Deregister(ctx context.Context, service *ServiceInfo) error
-}
-```
-
-## 性能规范
-
-### 内存管理
-- 避免不必要的内存分配
-- 使用对象池复用对象
-- 及时释放资源
-
-```go
-// ✅ 正确 - 使用对象池
-var servicePool = sync.Pool{
-    New: func() interface{} {
-        return &ServiceInfo{}
-    },
+func NewHelloModule(logger log.Logger) *HelloModule {
+    return &HelloModule{log: log.NewHelper(log.With(logger, "module", "hello"))}
 }
 
-func getService() *ServiceInfo {
-    return servicePool.Get().(*ServiceInfo)
+func (h *HelloModule) Name() string { return "hello" }
+func (h *HelloModule) Init(ctx context.Context, logger log.Logger, cfg config.Config) error {
+    h.log.Info("Init")
+    return nil
 }
+func (h *HelloModule) AfterAllInit(ctx context.Context) { h.log.Info("AfterAllInit") }
+func (h *HelloModule) AfterStart(ctx context.Context)   { h.log.Info("AfterStart") }
+func (h *HelloModule) BeforeClose(ctx context.Context)  { h.log.Info("BeforeClose") }
+func (h *HelloModule) AfterStop(ctx context.Context)    { h.log.Info("AfterStop") }
 
-func putService(s *ServiceInfo) {
-    s.Reset() // 重置状态
-    servicePool.Put(s)
-}
-```
+func main() {
+    logger := log.With(log.NewStdLogger(os.Stdout), "ts", log.DefaultTimestamp)
+    cfg := config.New(config.WithSource()) // 简化
+    mods := []Module{NewHelloModule(logger)}
 
-### 并发安全
-- 使用适当的同步机制
-- 避免竞态条件
-- 使用 context 进行取消
-
-```go
-// ✅ 正确 - 线程安全的实现
-type Registry struct {
-    services map[string]*ServiceInfo
-    mu       sync.RWMutex
-}
-
-func (r *Registry) GetService(name string) (*ServiceInfo, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    
-    service, exists := r.services[name]
-    if !exists {
-        return nil, NewServiceNotFoundError(name)
+    mm := NewModuleManager(logger, cfg, mods)
+    app := kratos.New()
+    mm.RegisterToApp(app)
+    if err := app.Run(); err != nil {
+        panic(err)
     }
-    return service, nil
 }
-```
-
-## 安全规范
-
-### 输入验证
-- 验证所有用户输入
-- 使用白名单验证
-- 防止注入攻击
-
-```go
-// ✅ 正确 - 输入验证
-func (r *Registry) Register(ctx context.Context, service *ServiceInfo) error {
-    // 验证输入
-    if service.Name == "" {
-        return NewInvalidInputError("service name cannot be empty")
-    }
-    
-    if service.Endpoint == "" {
-        return NewInvalidInputError("service endpoint cannot be empty")
-    }
-    
-    // 验证端点格式
-    if !isValidEndpoint(service.Endpoint) {
-        return NewInvalidEndpointError(service.Endpoint)
-    }
-    
-    // 注册服务
-    return r.register(ctx, service)
-}
-
-func isValidEndpoint(endpoint string) bool {
-    // 验证端点格式
-    return strings.Contains(endpoint, ":")
-}
-```
-
-### 敏感信息处理
-- 不要在日志中记录敏感信息
-- 使用加密存储敏感数据
-- 实现适当的访问控制
-
-```go
-// ✅ 正确 - 安全的日志记录
-func (s *Service) LogInfo() {
-    logger.Infof("Service: %s, Endpoint: %s", s.Name, s.Endpoint)
-    // 不记录敏感信息如密码、token等
-}
-
-// ❌ 错误 - 记录敏感信息
-func (s *Service) LogInfo() {
-    logger.Infof("Service: %s, Endpoint: %s, Token: %s", s.Name, s.Endpoint, s.Token)
-}
-```
-
-## 提交规范
-
-### Conventional Commits
-使用 Conventional Commits 规范：
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### 提交类型
-- **fix**: 修复 bug
-- **feat**: 新功能
-- **deps**: 依赖变更
-- **break**: 破坏性变更
-- **docs**: 文档更新
-- **refactor**: 代码重构
-- **style**: 代码格式调整
-- **test**: 测试相关
-- **chore**: 日常维护
-- **ci**: CI/CD 配置变更
-
-### 提交示例
-```bash
-# 修复 bug
-fix(transport): fix HTTP server startup issue
-
-# 新功能
-feat(registry): add service discovery support
-
-# 文档更新
-docs: update README with installation guide
-
-# 代码重构
-refactor(middleware): simplify logging middleware implementation
-```
-
-## 工具和检查
-
-### 代码格式化
-使用以下工具确保代码质量：
-
-```bash
-# 格式化代码
-go fmt ./...
-
-# 运行 linter
-golangci-lint run
-
-# 运行测试
-go test ./...
-
-# 检查覆盖率
-go test -cover ./...
-```
-
-### 预提交检查
-在 `.git/hooks/pre-commit` 中添加：
-
-```bash
-#!/bin/sh
-go fmt ./...
-golangci-lint run
-go test ./...
-```
-
-### CI/CD 集成
-在 GitHub Actions 或 GitLab CI 中添加：
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.21
-    
-    - name: Format check
-      run: go fmt ./...
-    
-    - name: Lint
-      run: golangci-lint run
-    
-    - name: Test
-      run: go test -v -cover ./...
-```
-
-## 总结
-
-遵循这些代码风格规范将确保：
-
-1. **一致性**: 所有代码遵循相同的风格和约定
-2. **可读性**: 代码易于理解和维护
-3. **可维护性**: 代码结构清晰，易于修改和扩展
-4. **可复用性**: 充分利用 Kratos 框架的现有功能
-5. **质量**: 通过工具和检查确保代码质量
-
-所有开发人员都应该熟悉并遵循这些规范，确保项目的长期成功。
