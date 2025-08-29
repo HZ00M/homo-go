@@ -16,7 +16,7 @@ func (m *mmEntity) Init(ctx context.Context) error {
 	return m.BaseEntity.Init(ctx)
 }
 
-// 实现 Saveable 以测试 IsAllLanded
+// 实现 SaveAble 以测试 IsAllLanded
 func (m *mmEntity) Save(ctx context.Context) error { m.SetDirty(false); return nil }
 func (m *mmEntity) AutoSetDirty() bool             { return true }
 

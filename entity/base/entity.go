@@ -19,7 +19,7 @@ import (
 //	type User struct { base.BaseEntity }
 //	func NewUser() *User { u := &User{}; u.SetTypeName("user"); return u }
 //
-// 说明：Saveable 的 Save/AutoSetDirty 由业务实体自行实现，本结构不做约束。
+// 说明：SaveAble 的 Save/AutoSetDirty 由业务实体自行实现，本结构不做约束。
 type BaseEntity struct {
 	mu          sync.RWMutex
 	id          string

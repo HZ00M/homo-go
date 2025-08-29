@@ -10,7 +10,7 @@
 
 ### A1 目标（Aim）
 
-实现配置中心集成提供者（ConfigProvider），负责从配置中心获取运行时信息，包括 appId、artifactId、regionId、channelId 等配置信息。直接复用 Kratos 框架的配置中心功能，确保与 Java 版本的 `ConfigCenterManager` 集成功能一致，支持多种配置中心（如 Nacos、Consul、Etcd 等）。
+实现配置中心集成提供者（ConfigProvider），负责从配置中心获取运行时信息，包括 appId、artifactId、regionId、channelId 等配置信息。直接复用 Kratos 框架的配置中心功能，确保与 Java 版本的 `ConfigCenterManager` 集成功能一致，支持多种配置中心（如 Nacos、Consul、Etcd 等）。作为内部功能模块，不对外提供API接口。
 
 ### A2 分析（Analyze）
 

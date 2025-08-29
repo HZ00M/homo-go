@@ -13,7 +13,7 @@ import (
 // - 内存索引：type -> id -> entity
 // - NotFoundHook：miss 时按 type 构建
 // - ReleaseAll：清空内存实体
-// - IsAllLanded：若存在 Saveable 实体未落地（脏），返回 false，否则 true
+// - IsAllLanded：若存在 SaveAble 实体未落地（脏），返回 false，否则 true
 // - TTL 卸载与周期保存（可选，基于 Option 配置）
 
 type MemoryManager struct {
@@ -213,7 +213,7 @@ func (m *MemoryManager) Get(ctx context.Context, entityType, id string) (facade.
 		}
 	}
 	m.mu.RUnlock()
-
+	//todo 从storage中加载
 	// miss: merge concurrent load/create via key-level lock
 	return m.loadOrCreateWithHook(ctx, entityType, id)
 }
@@ -307,13 +307,13 @@ func (m *MemoryManager) ReleaseAll(ctx context.Context) error {
 }
 
 // IsAllLanded: 是否所有可存储实体已落地。
-// 当前遍历内存实体，若发现实现了 Saveable 且 IsDirty() 为 true，则返回 false
+// 当前遍历内存实体，若发现实现了 SaveAble 且 IsDirty() 为 true，则返回 false
 func (m *MemoryManager) IsAllLanded(ctx context.Context) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, mm := range m.entities {
 		for _, e := range mm {
-			if s, ok := e.(facade.Saveable); ok {
+			if s, ok := e.(facade.SaveAble); ok {
 				if s.IsDirty() {
 					return false, nil
 				}
@@ -761,9 +761,9 @@ func (m *MemoryManager) scanSaveOnce() {
 		if ent == nil {
 			continue
 		}
-		s, ok := ent.(facade.Saveable)
+		s, ok := ent.(facade.SaveAble)
 		if !ok {
-			// 非 Saveable：仅重排
+			// 非 SaveAble：仅重排
 			m.mu.Lock()
 			m.rebucketSaveLocked(entityType, id, now)
 			m.mu.Unlock()

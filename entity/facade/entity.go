@@ -31,9 +31,9 @@ type DirtyOperator interface {
 	DirtyTimeUnixMilli() int64
 }
 
-// Saveable 可存储能力
+// SaveAble 可存储能力
 // 作用：定义实体如何被持久化；通常由存储能力实现。
-type Saveable interface {
+type SaveAble interface {
 	DirtyOperator
 	// Save: 将实体持久化到存储
 	Save(ctx context.Context) error

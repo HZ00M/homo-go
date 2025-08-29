@@ -102,5 +102,6 @@ proto:
 	protoc --proto_path=./api --proto_path=./third_party --go_out=paths=source_relative:./api --go-grpc_out=paths=source_relative:./api --go-http_out=paths=source_relative:./api rpc/call.proto
 	protoc --proto_path=./api --proto_path=./third_party --go_out=paths=source_relative:./api --go-grpc_out=paths=source_relative:./api --go-http_out=paths=source_relative:./api rpc/test.proto
 	protoc --proto_path=./api --proto_path=./third_party --go_out=paths=source_relative:./api --go-grpc_out=paths=source_relative:./api --go-http_out=paths=source_relative:./api entity/entity.proto
+	protoc --proto_path=./api --proto_path=./third_party --go_out=paths=source_relative:./api --go-grpc_out=paths=source_relative:./api --go-http_out=paths=source_relative:./api runtime/runtime.proto
 	protoc --proto_path=./errors --go_out=paths=source_relative:./errors ./errors/errors.proto
 

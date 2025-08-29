@@ -28,7 +28,7 @@ func (m *ttlSaveEntity) Save(ctx context.Context) error {
 func (m *ttlSaveEntity) AutoSetDirty() bool { return false }
 
 // 确保实现Saveable接口
-var _ facade.Saveable = (*ttlSaveEntity)(nil)
+var _ facade.SaveAble = (*ttlSaveEntity)(nil)
 
 func TestMemoryManager_TTLUnload(t *testing.T) {
 	mgr := NewMemoryManager(
